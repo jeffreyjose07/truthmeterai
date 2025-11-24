@@ -105,7 +105,8 @@
     "clean": "rm -rf out *.vsix",
     "package": "vsce package",
     "publish": "vsce publish",
-    "analyze": "webpack --mode production --profile --json > stats.json && webpack-bundle-analyzer stats.json"
+    "analyze": "webpack --mode production --profile --json > stats.json && webpack-bundle-analyzer stats.json",
+    "prepare": "husky"
   },
   "devDependencies": {
     "@types/glob": "^8.1.0",
@@ -118,6 +119,8 @@
     "@vscode/vsce": "^3.7.1",
     "eslint": "^8.28.0",
     "glob": "^8.1.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.2.7",
     "mocha": "^10.2.0",
     "nyc": "^15.1.0",
     "ts-loader": "^9.4.1",
@@ -132,5 +135,10 @@
     "date-fns": "^2.30.0",
     "lodash": "^4.17.21",
     "simple-git": "^3.19.0"
+  },
+  "lint-staged": {
+    "*.ts": [
+      "eslint --fix"
+    ]
   }
 }

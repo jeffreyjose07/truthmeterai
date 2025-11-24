@@ -31,6 +31,8 @@
     "dist",
     "**/*.d.ts",
     "node_modules",
-    ".vscode-test"
+    ".vscode-test",
+    "**/*.optimized.ts",
+    "**/extension.industry-best-practices.ts"
   ]
 }
