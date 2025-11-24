@@ -1,0 +1,102 @@
+{
+  "name": "windsurf-ai-metrics",
+  "displayName": "AI Pair Programming Metrics",
+  "description": "Measure ACTUAL AI coding assistant ROI with research-backed metrics",
+  "version": "1.0.0",
+  "publisher": "your-publisher-name",
+  "engines": {
+    "vscode": "^1.74.0"
+  },
+  "categories": ["Programming Languages", "Data Science", "Other"],
+  "keywords": ["AI", "metrics", "productivity", "windsurf", "cascade", "copilot"],
+  "activationEvents": [],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "aiMetrics.showDashboard",
+        "title": "Show AI Metrics Dashboard",
+        "category": "AI Metrics"
+      },
+      {
+        "command": "aiMetrics.generateReport",
+        "title": "Generate AI Impact Report",
+        "category": "AI Metrics"
+      },
+      {
+        "command": "aiMetrics.startTracking",
+        "title": "Start AI Metrics Tracking",
+        "category": "AI Metrics"
+      }
+    ],
+    "configuration": {
+      "title": "AI Metrics",
+      "properties": {
+        "aiMetrics.enableTracking": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable AI metrics tracking"
+        },
+        "aiMetrics.teamMode": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable team metrics aggregation"
+        },
+        "aiMetrics.developerHourlyRate": {
+          "type": "number",
+          "default": 75,
+          "description": "Average developer hourly rate for ROI calculation"
+        },
+        "aiMetrics.performance.maxEvents": {
+          "type": "number",
+          "default": 1000,
+          "description": "Maximum events to keep in memory"
+        },
+        "aiMetrics.performance.debounceDelay": {
+          "type": "number",
+          "default": 300,
+          "description": "Debounce delay in milliseconds"
+        },
+        "aiMetrics.performance.analysisInterval": {
+          "type": "number",
+          "default": 600000,
+          "description": "Full analysis interval in milliseconds"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./ && webpack --mode production",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile && npm run lint",
+    "lint": "eslint src --ext ts",
+    "test": "node ./out/test/runTest.js",
+    "test:unit": "npm run compile && mocha --require ts-node/register 'src/test/suite/**/*.test.ts'",
+    "test:coverage": "nyc npm run test:unit",
+    "clean": "rm -rf out *.vsix",
+    "analyze": "webpack --mode production --profile --json > stats.json && webpack-bundle-analyzer stats.json"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.74.0",
+    "@types/node": "18.x",
+    "@types/mocha": "^10.0.1",
+    "@types/glob": "^8.1.0",
+    "@typescript-eslint/eslint-plugin": "^5.45.0",
+    "@typescript-eslint/parser": "^5.45.0",
+    "@vscode/test-electron": "^2.3.0",
+    "eslint": "^8.28.0",
+    "glob": "^8.1.0",
+    "mocha": "^10.2.0",
+    "typescript": "^4.9.3",
+    "webpack": "^5.75.0",
+    "webpack-cli": "^5.0.0",
+    "webpack-bundle-analyzer": "^4.9.0",
+    "ts-loader": "^9.4.1",
+    "ts-node": "^10.9.1",
+    "nyc": "^15.1.0"
+  },
+  "dependencies": {
+    "simple-git": "^3.19.0"
+  }
+}
