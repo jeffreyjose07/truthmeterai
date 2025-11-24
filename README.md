@@ -38,7 +38,7 @@ Measure the **ACTUAL** impact of AI coding assistants on developer productivity 
 
 ### What is TruthMeter AI?
 
-TruthMeter AI is a VS Code/Windsurf extension that measures the **actual impact** of AI coding assistants on developer productivity. Unlike every other tool out there, we don't track vanity metrics like "lines of code generated" or "suggestions accepted." We track what actually matters: code quality, true productivity gains, and economic ROI.
+TruthMeter AI is a VS Code extension that measures the **actual impact** of AI coding assistants on developer productivity. Works with **any AI assistant** (GitHub Copilot, Cursor, Windsurf Cascade, Cody, etc.). Unlike every other tool out there, we don't track vanity metrics like "lines of code generated" or "suggestions accepted." We track what actually matters: code quality, true productivity gains, and economic ROI.
 
 ### The Uncomfortable Truth
 
@@ -151,10 +151,10 @@ Get notified when:
    npm install -g vsce
    vsce package
    ```
-   This creates `windsurf-ai-metrics-1.0.0.vsix`
+   This creates `truthmeter-ai-1.0.0.vsix`
 
 2. **Install in VS Code**:
-   - Open VS Code or Windsurf
+   - Open VS Code (or Cursor/Windsurf)
    - Press `Cmd+Shift+P` (Mac) or `Ctrl+Shift+P` (Windows/Linux)
    - Type "Extensions: Install from VSIX"
    - Select the generated `.vsix` file
@@ -193,10 +193,10 @@ npm run compile
 
 # Link to VS Code extensions directory
 # Mac/Linux:
-ln -s $(pwd) ~/.vscode/extensions/windsurf-ai-metrics
+ln -s $(pwd) ~/.vscode/extensions/truthmeter-ai
 
 # Windows (run as administrator):
-mklink /D "%USERPROFILE%\.vscode\extensions\windsurf-ai-metrics" "%CD%"
+mklink /D "%USERPROFILE%\.vscode\extensions\truthmeter-ai" "%CD%"
 
 # Reload VS Code
 ```
@@ -1927,7 +1927,7 @@ Update the `publisher` field with your publisher ID:
 ```json
 {
   "publisher": "your-actual-publisher-id",  // Change this!
-  "name": "windsurf-ai-metrics",
+  "name": "truthmeter-ai",
   "version": "1.0.0",
   ...
 }
@@ -1964,7 +1964,7 @@ npm run compile
 vsce package
 
 # Expected output:
-# "DONE Packaged: /path/to/windsurf-ai-metrics-1.0.0.vsix (2.5MB)"
+# "DONE Packaged: /path/to/truthmeter-ai-1.0.0.vsix (2.5MB)"
 ```
 
 **Troubleshooting Package Errors**:
@@ -1999,10 +1999,10 @@ Before publishing, test the packaged extension:
 # 5. Test all commands and features
 
 # Method 2: Install via command line
-code --install-extension windsurf-ai-metrics-1.0.0.vsix
+code --install-extension truthmeter-ai-1.0.0.vsix
 
 # Test in Cursor
-cursor --install-extension windsurf-ai-metrics-1.0.0.vsix
+cursor --install-extension truthmeter-ai-1.0.0.vsix
 ```
 
 **Testing Checklist**:
@@ -2034,10 +2034,10 @@ vsce publish major   # 1.0.0 -> 2.0.0
 **First-Time Publishing**:
 ```bash
 # Expected output:
-# Publishing your-publisher-id.windsurf-ai-metrics@1.0.0...
-# Successfully published your-publisher-id.windsurf-ai-metrics@1.0.0!
+# Publishing your-publisher-id.truthmeter-ai@1.0.0...
+# Successfully published your-publisher-id.truthmeter-ai@1.0.0!
 # Your extension will live at:
-# https://marketplace.visualstudio.com/items?itemName=your-publisher-id.windsurf-ai-metrics
+# https://marketplace.visualstudio.com/items?itemName=your-publisher-id.truthmeter-ai
 ```
 
 ### Step 7: Verify Publication
@@ -2194,7 +2194,7 @@ Before each publish:
 
 4. **Rating Badge**:
    ```markdown
-   [![Rating](https://img.shields.io/visual-studio-marketplace/r/your-publisher.windsurf-ai-metrics)](https://marketplace.visualstudio.com/items?itemName=your-publisher.windsurf-ai-metrics)
+   [![Rating](https://img.shields.io/visual-studio-marketplace/r/your-publisher.truthmeter-ai)](https://marketplace.visualstudio.com/items?itemName=your-publisher.truthmeter-ai)
    ```
 
 ### Automation with CI/CD

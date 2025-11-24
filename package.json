@@ -1,7 +1,7 @@
 {
-  "name": "windsurf-ai-metrics",
-  "displayName": "AI Pair Programming Metrics",
-  "description": "Measure ACTUAL AI coding assistant ROI with research-backed metrics",
+  "name": "truthmeter-ai",
+  "displayName": "TruthMeter AI - Coding Assistant Metrics",
+  "description": "Measure ACTUAL AI coding assistant ROI (Copilot, Cascade, Cursor, Cody, etc.) with research-backed metrics",
   "version": "1.0.0",
   "publisher": "your-publisher-name",
   "author": {
@@ -20,8 +20,23 @@
   "engines": {
     "vscode": "^1.74.0"
   },
-  "categories": ["Programming Languages", "Data Science", "Other"],
-  "keywords": ["AI", "metrics", "productivity", "windsurf", "cascade", "copilot"],
+  "categories": [
+    "Programming Languages",
+    "Data Science",
+    "Other"
+  ],
+  "keywords": [
+    "AI",
+    "metrics",
+    "productivity",
+    "copilot",
+    "cascade",
+    "cursor",
+    "cody",
+    "coding-assistant",
+    "ROI",
+    "analytics"
+  ],
   "activationEvents": [],
   "main": "./out/extension.js",
   "contributes": {
@@ -93,28 +108,29 @@
     "analyze": "webpack --mode production --profile --json > stats.json && webpack-bundle-analyzer stats.json"
   },
   "devDependencies": {
-    "@types/vscode": "^1.74.0",
-    "@types/node": "18.x",
-    "@types/mocha": "^10.0.1",
     "@types/glob": "^8.1.0",
+    "@types/mocha": "^10.0.1",
+    "@types/node": "18.x",
+    "@types/vscode": "^1.74.0",
     "@typescript-eslint/eslint-plugin": "^5.45.0",
     "@typescript-eslint/parser": "^5.45.0",
     "@vscode/test-electron": "^2.3.0",
+    "@vscode/vsce": "^3.7.1",
     "eslint": "^8.28.0",
     "glob": "^8.1.0",
     "mocha": "^10.2.0",
-    "typescript": "^4.9.3",
-    "webpack": "^5.75.0",
-    "webpack-cli": "^5.0.0",
-    "webpack-bundle-analyzer": "^4.9.0",
+    "nyc": "^15.1.0",
     "ts-loader": "^9.4.1",
     "ts-node": "^10.9.1",
-    "nyc": "^15.1.0"
+    "typescript": "^4.9.3",
+    "webpack": "^5.75.0",
+    "webpack-bundle-analyzer": "^4.9.0",
+    "webpack-cli": "^5.0.0"
   },
   "dependencies": {
-    "simple-git": "^3.19.0",
     "chart.js": "^4.3.0",
     "date-fns": "^2.30.0",
-    "lodash": "^4.17.21"
+    "lodash": "^4.17.21",
+    "simple-git": "^3.19.0"
   }
 }
