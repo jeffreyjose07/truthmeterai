@@ -1,0 +1,80 @@
+{
+  "name": "windsurf-ai-metrics",
+  "displayName": "AI Pair Programming Metrics",
+  "description": "Measure ACTUAL AI coding assistant ROI with research-backed metrics",
+  "version": "1.0.0",
+  "publisher": "your-publisher-name",
+  "engines": {
+    "vscode": "^1.74.0"
+  },
+  "categories": ["Programming Languages", "Data Science", "Other"],
+  "keywords": ["AI", "metrics", "productivity", "windsurf", "cascade", "copilot"],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "aiMetrics.showDashboard",
+        "title": "Show AI Metrics Dashboard",
+        "category": "AI Metrics"
+      },
+      {
+        "command": "aiMetrics.generateReport",
+        "title": "Generate AI Impact Report",
+        "category": "AI Metrics"
+      },
+      {
+        "command": "aiMetrics.startTracking",
+        "title": "Start AI Metrics Tracking",
+        "category": "AI Metrics"
+      }
+    ],
+    "configuration": {
+      "title": "AI Metrics",
+      "properties": {
+        "aiMetrics.enableTracking": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable AI metrics tracking"
+        },
+        "aiMetrics.teamMode": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable team metrics aggregation"
+        },
+        "aiMetrics.developerHourlyRate": {
+          "type": "number",
+          "default": 75,
+          "description": "Average developer hourly rate for ROI calculation"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./ && webpack --mode production",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile && npm run lint",
+    "lint": "eslint src --ext ts",
+    "test": "node ./out/test/runTest.js"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.74.0",
+    "@types/node": "18.x",
+    "@typescript-eslint/eslint-plugin": "^5.45.0",
+    "@typescript-eslint/parser": "^5.45.0",
+    "eslint": "^8.28.0",
+    "typescript": "^4.9.3",
+    "webpack": "^5.75.0",
+    "webpack-cli": "^5.0.0",
+    "ts-loader": "^9.4.1"
+  },
+  "dependencies": {
+    "simple-git": "^3.19.0",
+    "chart.js": "^4.3.0",
+    "date-fns": "^2.30.0",
+    "lodash": "^4.17.21"
+  }
+}

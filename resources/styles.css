@@ -1,0 +1,217 @@
+:root {
+    --bg-primary: #1e1e1e;
+    --bg-secondary: #252526;
+    --bg-card: #2d2d30;
+    --text-primary: #cccccc;
+    --text-secondary: #969696;
+    --accent-positive: #4CAF50;
+    --accent-negative: #F44336;
+    --accent-warning: #FF9800;
+    --border: #3c3c3c;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    padding: 20px;
+    line-height: 1.6;
+}
+
+.container {
+    max-width: 1400px;
+    margin: 0 auto;
+}
+
+header {
+    text-align: center;
+    margin-bottom: 40px;
+    padding-bottom: 20px;
+    border-bottom: 2px solid var(--border);
+}
+
+h1 {
+    font-size: 2.5rem;
+    margin-bottom: 10px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.subtitle {
+    color: var(--text-secondary);
+    font-size: 1.1rem;
+}
+
+.alert-banner {
+    display: none;
+    margin-bottom: 30px;
+}
+
+.alert {
+    padding: 15px 20px;
+    border-radius: 8px;
+    margin-bottom: 10px;
+    font-weight: 500;
+}
+
+.alert.error {
+    background: rgba(244, 67, 54, 0.1);
+    border-left: 4px solid var(--accent-negative);
+    color: #ff6b6b;
+}
+
+.alert.warning {
+    background: rgba(255, 152, 0, 0.1);
+    border-left: 4px solid var(--accent-warning);
+    color: #ffa726;
+}
+
+.metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 20px;
+    margin-bottom: 40px;
+}
+
+.metric-card {
+    background: var(--bg-card);
+    border-radius: 12px;
+    padding: 24px;
+    border: 1px solid var(--border);
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.metric-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+}
+
+.metric-card.highlight {
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.1), rgba(118, 75, 162, 0.1));
+    border: 1px solid rgba(102, 126, 234, 0.3);
+}
+
+.metric-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+}
+
+.metric-label {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.metric-trend {
+    font-size: 1.5rem;
+    font-weight: bold;
+}
+
+.metric-trend.negative {
+    color: var(--accent-negative);
+}
+
+.metric-value {
+    font-size: 2.5rem;
+    font-weight: bold;
+    margin-bottom: 8px;
+}
+
+.metric-value.negative {
+    color: var(--accent-negative);
+}
+
+.metric-detail {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    margin-bottom: 12px;
+}
+
+.metric-insight {
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+    font-size: 0.85rem;
+    color: #a0a0a0;
+}
+
+.recommendations-section {
+    background: var(--bg-card);
+    border-radius: 12px;
+    padding: 30px;
+    margin-bottom: 40px;
+    border: 1px solid var(--border);
+}
+
+.recommendations-section h2 {
+    margin-bottom: 20px;
+    color: var(--text-primary);
+}
+
+.recommendations-list {
+    margin-top: 20px;
+}
+
+.recommendation-item {
+    display: flex;
+    align-items: flex-start;
+    padding: 15px;
+    margin-bottom: 12px;
+    background: var(--bg-secondary);
+    border-radius: 8px;
+    border-left: 3px solid var(--accent-warning);
+}
+
+.rec-icon {
+    font-size: 1.5rem;
+    margin-right: 15px;
+}
+
+.rec-text {
+    flex: 1;
+    line-height: 1.5;
+}
+
+.actions {
+    display: flex;
+    gap: 15px;
+    justify-content: center;
+    padding: 30px;
+}
+
+.actions button {
+    padding: 12px 30px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.actions button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+}
+
+@media (max-width: 768px) {
+    .metrics-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .actions {
+        flex-direction: column;
+    }
+}
