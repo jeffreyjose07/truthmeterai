@@ -4,14 +4,25 @@
   "description": "Measure ACTUAL AI coding assistant ROI with research-backed metrics",
   "version": "1.0.0",
   "publisher": "your-publisher-name",
+  "author": {
+    "name": "Jeffrey Jose"
+  },
+  "license": "AGPL-3.0",
+  "icon": "icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jeffreyjose07/truthmeterai"
+  },
+  "homepage": "https://github.com/jeffreyjose07/truthmeterai#readme",
+  "bugs": {
+    "url": "https://github.com/jeffreyjose07/truthmeterai/issues"
+  },
   "engines": {
     "vscode": "^1.74.0"
   },
   "categories": ["Programming Languages", "Data Science", "Other"],
   "keywords": ["AI", "metrics", "productivity", "windsurf", "cascade", "copilot"],
-  "activationEvents": [
-    "onStartupFinished"
-  ],
+  "activationEvents": [],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
@@ -48,6 +59,21 @@
           "type": "number",
           "default": 75,
           "description": "Average developer hourly rate for ROI calculation"
+        },
+        "aiMetrics.performance.maxEvents": {
+          "type": "number",
+          "default": 1000,
+          "description": "Maximum events to keep in memory"
+        },
+        "aiMetrics.performance.debounceDelay": {
+          "type": "number",
+          "default": 300,
+          "description": "Debounce delay in milliseconds"
+        },
+        "aiMetrics.performance.analysisInterval": {
+          "type": "number",
+          "default": 600000,
+          "description": "Full analysis interval in milliseconds"
         }
       }
     }
@@ -61,7 +87,10 @@
     "test": "node ./out/test/runTest.js",
     "test:unit": "npm run compile && mocha --require ts-node/register 'src/test/suite/**/*.test.ts'",
     "test:coverage": "nyc npm run test:unit",
-    "clean": "rm -rf out *.vsix"
+    "clean": "rm -rf out *.vsix",
+    "package": "vsce package",
+    "publish": "vsce publish",
+    "analyze": "webpack --mode production --profile --json > stats.json && webpack-bundle-analyzer stats.json"
   },
   "devDependencies": {
     "@types/vscode": "^1.74.0",
@@ -77,6 +106,7 @@
     "typescript": "^4.9.3",
     "webpack": "^5.75.0",
     "webpack-cli": "^5.0.0",
+    "webpack-bundle-analyzer": "^4.9.0",
     "ts-loader": "^9.4.1",
     "ts-node": "^10.9.1",
     "nyc": "^15.1.0"

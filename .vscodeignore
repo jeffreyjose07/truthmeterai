@@ -1,11 +1,68 @@
+# Development environment
 .vscode/**
 .vscode-test/**
+
+# Source files (only include compiled out/)
 src/**
-.gitignore
-.yarnrc
+*.ts
+!src/**/*.d.ts
+*.map
+
+# Configuration files
+tsconfig.json
 webpack.config.js
-**/tsconfig.json
-**/.eslintrc.json
-**/*.map
-**/*.ts
+.eslintrc.json
+.yarnrc
+
+# Git
+.git/**
+.gitignore
+.gitattributes
+
+# Node modules (webpack bundles dependencies)
 node_modules/**
+
+# Test files
+out/test/**
+coverage/**
+.nyc_output/**
+.mocha*
+**/*.test.ts
+test/**
+
+# Documentation (keep README.md and LICENSE!)
+docs/**
+*.md
+!README.md
+!LICENSE
+
+# Build artifacts
+stats.json
+*.vsix
+
+# CI/CD
+.github/**
+.travis.yml
+.circleci/**
+
+# Development scripts
+create-icon.js
+
+# Optimized versions for reference
+*.optimized.ts
+*.fixed
+package.json.fixed
+src/extension.industry-best-practices.ts
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Documentation markdown
+ai-metrics-plugin-implementation.md
