@@ -60,6 +60,10 @@ export async function activate(context: vscode.ExtensionContext) {
             try {
                 const dash = await getDashboard(context);
                 await ensureTracking(context);
+
+                // Calculate and store fresh metrics before showing dashboard
+                await calculateAndStoreMetrics(context);
+
                 dash.show();
             } catch (error) {
                 logger.error('Error showing dashboard', error);
@@ -194,6 +198,12 @@ async function getDashboard(context: vscode.ExtensionContext): Promise<Dashboard
         const stor = await getStorage(context);
         const { DashboardProvider } = await import('./ui/DashboardProvider');
         dashboard = new DashboardProvider(context, stor);
+
+        // Set refresh callback to recalculate metrics
+        dashboard.setRefreshCallback(async () => {
+            await calculateAndStoreMetrics(context);
+        });
+
         logger.info('Dashboard created');
     }
     return dashboard;
@@ -245,11 +255,111 @@ async function ensureTracking(context: vscode.ExtensionContext) {
         }
     }, 15000); // Every 15 seconds
 
+    // Start periodic metrics calculation and storage
+    const metricsInterval = setInterval(async () => {
+        try {
+            await calculateAndStoreMetrics(context);
+        } catch (error) {
+            logger.error('Error calculating metrics', error);
+        }
+    }, 60000); // Every 60 seconds
+
     context.subscriptions.push({
-        dispose: () => clearInterval(statusBarInterval)
+        dispose: () => {
+            clearInterval(statusBarInterval);
+            clearInterval(metricsInterval);
+        }
     });
 
     logger.info('Tracking started');
+}
+
+/**
+ * Calculate and store metrics periodically
+ */
+async function calculateAndStoreMetrics(context: vscode.ExtensionContext): Promise<void> {
+    try {
+        const stor = await getStorage(context);
+        const collectors = await getCollectors(context);
+
+        // Get quick metrics from collectors
+        const aiMetrics = await collectors.aiCollector!.getMetrics();
+
+        // Build AllMetrics object with available data
+        const metrics: AllMetrics = {
+            quality: {
+                codeChurn: {
+                    rate: aiMetrics.churnRate || 0,
+                    trend: 'stable' as const,
+                    aiVsHuman: 1
+                },
+                duplication: {
+                    cloneRate: 0,
+                    copyPasteRatio: 0,
+                    beforeAI: 0,
+                    afterAI: 0
+                },
+                complexity: {
+                    cyclomaticComplexity: 0,
+                    cognitiveLoad: 0,
+                    nestingDepth: 0,
+                    aiGeneratedComplexity: 0
+                },
+                refactoring: {
+                    rate: 0,
+                    aiCodeRefactored: 0
+                },
+                overallScore: aiMetrics.acceptanceRate || 0
+            },
+            productivity: {
+                taskCompletion: {
+                    velocityChange: aiMetrics.acceptanceRate * 0.26,
+                    cycleTime: 0,
+                    reworkRate: aiMetrics.churnRate || 0
+                },
+                flowEfficiency: {
+                    focusTime: 0,
+                    contextSwitches: 0,
+                    waitTime: 0
+                },
+                valueDelivery: {
+                    featuresShipped: aiMetrics.totalSuggestions,
+                    bugRate: 0,
+                    customerImpact: 0
+                },
+                actualGain: aiMetrics.acceptanceRate * 0.26, // Based on research
+                perceivedGain: aiMetrics.acceptanceRate * 1.83,
+                netTimeSaved: aiMetrics.totalSuggestions * 0.5 // Rough estimate
+            },
+            roi: {
+                costBenefit: {
+                    licenseCost: 20,
+                    timeSaved: aiMetrics.totalSuggestions * 0.5,
+                    timeWasted: 0,
+                    netValue: aiMetrics.totalSuggestions * 10
+                },
+                hiddenCosts: {
+                    technicalDebt: 0,
+                    maintenanceBurden: 0,
+                    knowledgeGaps: 0
+                },
+                teamImpact: {
+                    reviewTime: 0,
+                    onboardingCost: 0,
+                    collaborationFriction: 0
+                },
+                overallROI: aiMetrics.acceptanceRate > 0.5 ? 1.5 : 0.8,
+                breakEvenDays: 30
+            }
+        };
+
+        // Store the calculated metrics
+        await stor.storeMetrics(metrics);
+        logger.info('Metrics calculated and stored');
+    } catch (error) {
+        logger.error('Error in calculateAndStoreMetrics', error);
+        throw error;
+    }
 }
 
 /**

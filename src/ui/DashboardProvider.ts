@@ -4,11 +4,16 @@ import { LocalStorage } from '../storage/LocalStorage';
 
 export class DashboardProvider {
     private panel: vscode.WebviewPanel | undefined;
+    private onRefreshCallback?: () => Promise<void>;
 
     constructor(
         private context: vscode.ExtensionContext,
         private storage: LocalStorage
     ) {}
+
+    public setRefreshCallback(callback: () => Promise<void>) {
+        this.onRefreshCallback = callback;
+    }
 
     public async show() {
         const column = vscode.window.activeTextEditor
@@ -68,88 +73,113 @@ export class DashboardProvider {
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <title>AI Metrics Dashboard</title>
             <link href="${styleUri}" rel="stylesheet">
-            <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
         </head>
         <body>
-            <div class="container">
-                <header>
-                    <h1>AI Pair Programming Metrics</h1>
-                    <div class="subtitle">Research-Backed Impact Analysis</div>
+            <div class="dashboard-container">
+                <header class="dashboard-header">
+                    <div class="header-content">
+                        <h1 class="dashboard-title">AI Coding Assistant Metrics</h1>
+                        <p class="dashboard-subtitle">Research-Backed Impact Analysis</p>
+                    </div>
+                    <div class="header-actions">
+                        <button class="btn-secondary" onclick="refreshData()">
+                            <span class="btn-icon">↻</span>
+                            Refresh
+                        </button>
+                        <button class="btn-primary" onclick="exportReport()">
+                            <span class="btn-icon">↓</span>
+                            Export
+                        </button>
+                    </div>
                 </header>
 
-                <div class="alert-banner" id="alertBanner"></div>
+                <div class="alert-banner" id="alertBanner" style="display: none;"></div>
 
-                <div class="metrics-grid">
-                    <div class="metric-card highlight">
-                        <div class="metric-header">
-                            <span class="metric-label">ACTUAL ROI</span>
-                            <span class="metric-trend" id="roiTrend">↓</span>
-                        </div>
-                        <div class="metric-value" id="roiValue">-19%</div>
-                        <div class="metric-detail">
-                            Perceived: <span id="perceivedROI">+20%</span>
-                        </div>
-                        <div class="metric-insight">
-                            Developers overestimate gains by 39%
-                        </div>
-                    </div>
-
-                    <div class="metric-card">
-                        <div class="metric-header">
-                            <span class="metric-label">CODE CHURN</span>
-                            <span class="metric-trend negative">↑</span>
-                        </div>
-                        <div class="metric-value" id="churnValue">42%</div>
-                        <div class="metric-detail">
-                            AI code rewritten within 14 days
-                        </div>
-                        <div class="metric-insight">
-                            2x higher than human code
-                        </div>
-                    </div>
-
-                    <div class="metric-card">
-                        <div class="metric-header">
-                            <span class="metric-label">CODE CLONES</span>
-                            <span class="metric-trend negative">↑</span>
-                        </div>
-                        <div class="metric-value" id="duplicationValue">4.2x</div>
-                        <div class="metric-detail">
-                            Increase in copy-paste code
-                        </div>
-                        <div class="metric-insight">
-                            Technical debt accumulating
-                        </div>
-                    </div>
-
-                    <div class="metric-card">
-                        <div class="metric-header">
-                            <span class="metric-label">NET TIME IMPACT</span>
-                            <span class="metric-trend negative">↓</span>
-                        </div>
-                        <div class="metric-value negative" id="timeValue">-0.6h</div>
-                        <div class="metric-detail">
-                            Per developer per week
-                        </div>
-                        <div class="metric-insight">
-                            More time fixing than saving
-                        </div>
-                    </div>
+                <div id="loadingState" class="loading-state">
+                    <div class="loading-spinner"></div>
+                    <p>Collecting metrics data...</p>
+                    <p class="loading-hint">Start coding to begin tracking AI assistant impact</p>
                 </div>
 
-                <div class="recommendations-section">
-                    <h2>Data-Driven Recommendations</h2>
-                    <div id="recommendations" class="recommendations-list"></div>
-                </div>
+                <div id="metricsContainer" style="display: none;">
+                    <div class="metrics-grid">
+                        <div class="metric-card card-primary">
+                            <div class="card-header">
+                                <div class="card-title">
+                                    <span class="card-icon">📊</span>
+                                    <span>Actual ROI</span>
+                                </div>
+                                <span class="metric-trend" id="roiTrend">—</span>
+                            </div>
+                            <div class="card-body">
+                                <div class="metric-value" id="roiValue">—</div>
+                                <div class="metric-label">Return on Investment</div>
+                                <div class="metric-detail" id="perceivedROIDetail" style="display: none;">
+                                    Perceived: <span id="perceivedROI">—</span>
+                                </div>
+                            </div>
+                            <div class="card-footer" id="roiInsight"></div>
+                        </div>
 
-                <div class="actions">
-                    <button onclick="refreshData()">Refresh</button>
-                    <button onclick="exportReport()">Export Report</button>
+                        <div class="metric-card card-warning">
+                            <div class="card-header">
+                                <div class="card-title">
+                                    <span class="card-icon">🔄</span>
+                                    <span>Code Churn</span>
+                                </div>
+                                <span class="metric-trend" id="churnTrend">—</span>
+                            </div>
+                            <div class="card-body">
+                                <div class="metric-value" id="churnValue">—</div>
+                                <div class="metric-label">Code rewritten within 14 days</div>
+                            </div>
+                            <div class="card-footer" id="churnInsight"></div>
+                        </div>
+
+                        <div class="metric-card card-danger">
+                            <div class="card-header">
+                                <div class="card-title">
+                                    <span class="card-icon">📋</span>
+                                    <span>Code Duplication</span>
+                                </div>
+                                <span class="metric-trend" id="duplicationTrend">—</span>
+                            </div>
+                            <div class="card-body">
+                                <div class="metric-value" id="duplicationValue">—</div>
+                                <div class="metric-label">Copy-paste code increase</div>
+                            </div>
+                            <div class="card-footer" id="duplicationInsight"></div>
+                        </div>
+
+                        <div class="metric-card card-info">
+                            <div class="card-header">
+                                <div class="card-title">
+                                    <span class="card-icon">⏱️</span>
+                                    <span>Time Impact</span>
+                                </div>
+                                <span class="metric-trend" id="timeTrend">—</span>
+                            </div>
+                            <div class="card-body">
+                                <div class="metric-value" id="timeValue">—</div>
+                                <div class="metric-label">Net hours per week</div>
+                            </div>
+                            <div class="card-footer" id="timeInsight"></div>
+                        </div>
+                    </div>
+
+                    <div class="recommendations-section" id="recommendationsSection" style="display: none;">
+                        <div class="section-header">
+                            <h2>Recommendations</h2>
+                            <p class="section-subtitle">Data-driven insights to optimize AI usage</p>
+                        </div>
+                        <div id="recommendations" class="recommendations-list"></div>
+                    </div>
                 </div>
             </div>
 
             <script>
                 const vscode = acquireVsCodeApi();
+                let hasData = false;
 
                 function refreshData() {
                     vscode.postMessage({ command: 'refresh' });
@@ -167,39 +197,112 @@ export class DashboardProvider {
                 });
 
                 function updateDashboard(data) {
-                    document.getElementById('roiValue').textContent =
-                        data.roi > 0 ? '+' + data.roi + '%' : data.roi + '%';
-                    document.getElementById('perceivedROI').textContent =
-                        '+' + data.perceivedROI + '%';
-                    document.getElementById('churnValue').textContent =
-                        data.churn + '%';
-                    document.getElementById('duplicationValue').textContent =
-                        data.duplication + 'x';
-                    document.getElementById('timeValue').textContent =
-                        data.netTime > 0 ? '+' + data.netTime + 'h' : data.netTime + 'h';
+                    hasData = data.hasData;
 
-                    updateRecommendations(data.recommendations);
-                    showAlerts(data.alerts);
+                    if (!hasData) {
+                        document.getElementById('loadingState').style.display = 'flex';
+                        document.getElementById('metricsContainer').style.display = 'none';
+                        return;
+                    }
+
+                    document.getElementById('loadingState').style.display = 'none';
+                    document.getElementById('metricsContainer').style.display = 'block';
+
+                    // Update ROI
+                    const roiElement = document.getElementById('roiValue');
+                    if (data.roi !== null) {
+                        const roiValue = Math.round(data.roi * 100);
+                        roiElement.textContent = (roiValue > 0 ? '+' : '') + roiValue + '%';
+                        roiElement.className = 'metric-value ' + (roiValue > 0 ? 'positive' : 'negative');
+                        document.getElementById('roiTrend').textContent = roiValue > 0 ? '↑' : '↓';
+                        document.getElementById('roiInsight').textContent = roiValue > 0
+                            ? 'Positive impact on productivity'
+                            : 'Cost exceeds benefit';
+
+                        if (data.perceivedROI) {
+                            document.getElementById('perceivedROIDetail').style.display = 'block';
+                            document.getElementById('perceivedROI').textContent = '+' + Math.round(data.perceivedROI * 100) + '%';
+                        }
+                    } else {
+                        roiElement.textContent = 'Calculating...';
+                        roiElement.className = 'metric-value';
+                    }
+
+                    // Update Churn
+                    const churnElement = document.getElementById('churnValue');
+                    if (data.churn !== null) {
+                        const churnValue = Math.round(data.churn * 100);
+                        churnElement.textContent = churnValue + '%';
+                        churnElement.className = 'metric-value ' + (churnValue > 30 ? 'negative' : 'positive');
+                        document.getElementById('churnTrend').textContent = churnValue > 30 ? '↑' : '↓';
+                        document.getElementById('churnInsight').textContent = churnValue > 30
+                            ? 'High rewrite rate detected'
+                            : 'Healthy code stability';
+                    } else {
+                        churnElement.textContent = 'Calculating...';
+                    }
+
+                    // Update Duplication
+                    const dupElement = document.getElementById('duplicationValue');
+                    if (data.duplication !== null) {
+                        dupElement.textContent = data.duplication.toFixed(1) + 'x';
+                        dupElement.className = 'metric-value ' + (data.duplication > 2 ? 'negative' : 'positive');
+                        document.getElementById('duplicationTrend').textContent = data.duplication > 2 ? '↑' : '↓';
+                        document.getElementById('duplicationInsight').textContent = data.duplication > 2
+                            ? 'Technical debt increasing'
+                            : 'Good code reuse';
+                    } else {
+                        dupElement.textContent = 'Calculating...';
+                    }
+
+                    // Update Time Impact
+                    const timeElement = document.getElementById('timeValue');
+                    if (data.netTime !== null) {
+                        const hours = data.netTime.toFixed(1);
+                        timeElement.textContent = (data.netTime > 0 ? '+' : '') + hours + 'h';
+                        timeElement.className = 'metric-value ' + (data.netTime > 0 ? 'positive' : 'negative');
+                        document.getElementById('timeTrend').textContent = data.netTime > 0 ? '↑' : '↓';
+                        document.getElementById('timeInsight').textContent = data.netTime > 0
+                            ? 'Net time saved'
+                            : 'More time spent than saved';
+                    } else {
+                        timeElement.textContent = 'Calculating...';
+                    }
+
+                    // Update Recommendations
+                    if (data.recommendations && data.recommendations.length > 0) {
+                        document.getElementById('recommendationsSection').style.display = 'block';
+                        updateRecommendations(data.recommendations);
+                    }
+
+                    // Show Alerts
+                    if (data.alerts && data.alerts.length > 0) {
+                        showAlerts(data.alerts);
+                    }
                 }
 
                 function updateRecommendations(recommendations) {
                     const container = document.getElementById('recommendations');
                     container.innerHTML = recommendations.map(rec =>
-                        '<div class="recommendation-item">' +
-                        '<span class="rec-icon">' + rec.icon + '</span>' +
-                        '<span class="rec-text">' + rec.text + '</span>' +
+                        '<div class="recommendation-card">' +
+                        '<div class="rec-icon">' + rec.icon + '</div>' +
+                        '<div class="rec-content">' +
+                        '<div class="rec-title">' + rec.title + '</div>' +
+                        '<div class="rec-text">' + rec.text + '</div>' +
+                        '</div>' +
                         '</div>'
                     ).join('');
                 }
 
                 function showAlerts(alerts) {
-                    if (alerts && alerts.length > 0) {
-                        const banner = document.getElementById('alertBanner');
-                        banner.innerHTML = alerts.map(alert =>
-                            '<div class="alert ' + alert.type + '">' + alert.message + '</div>'
-                        ).join('');
-                        banner.style.display = 'block';
-                    }
+                    const banner = document.getElementById('alertBanner');
+                    banner.innerHTML = alerts.map(alert =>
+                        '<div class="alert alert-' + alert.type + '">' +
+                        '<span class="alert-icon">' + (alert.type === 'error' ? '⚠️' : 'ℹ️') + '</span>' +
+                        '<span class="alert-message">' + alert.message + '</span>' +
+                        '</div>'
+                    ).join('');
+                    banner.style.display = 'block';
                 }
             </script>
         </body>
@@ -207,17 +310,37 @@ export class DashboardProvider {
     }
 
     private async refreshData() {
+        // Trigger metrics recalculation if callback is set
+        if (this.onRefreshCallback) {
+            try {
+                await this.onRefreshCallback();
+            } catch (error) {
+                console.error('Error in refresh callback:', error);
+            }
+        }
+
         const metrics = await this.storage.getLatestMetrics();
 
-        const dashboardData = {
-            roi: metrics.roi?.overallROI || -19,
-            perceivedROI: 20,
-            churn: Math.round((metrics.quality?.codeChurn?.rate || 0.42) * 100),
-            duplication: metrics.quality?.duplication?.cloneRate ? metrics.quality.duplication.cloneRate * 4 : 4.2,
-            netTime: metrics.productivity?.netTimeSaved || -0.6,
+        // Check if we have actual data
+        const hasActualData = metrics && (
+            metrics.roi?.overallROI !== undefined ||
+            metrics.quality?.codeChurn?.rate !== undefined ||
+            metrics.quality?.duplication?.cloneRate !== undefined ||
+            metrics.productivity?.netTimeSaved !== undefined
+        );
 
-            recommendations: this.generateRecommendations(metrics),
-            alerts: this.generateAlerts(metrics)
+        const dashboardData = {
+            hasData: hasActualData,
+            roi: metrics.roi?.overallROI ?? null,
+            perceivedROI: metrics.productivity?.perceivedGain ?? null,
+            churn: metrics.quality?.codeChurn?.rate ?? null,
+            duplication: metrics.quality?.duplication?.cloneRate
+                ? metrics.quality.duplication.cloneRate / (metrics.quality.duplication.beforeAI || 1)
+                : null,
+            netTime: metrics.productivity?.netTimeSaved ?? null,
+
+            recommendations: hasActualData ? this.generateRecommendations(metrics) : [],
+            alerts: hasActualData ? this.generateAlerts(metrics) : []
         };
 
         this.panel?.webview.postMessage({
@@ -229,30 +352,44 @@ export class DashboardProvider {
     private generateRecommendations(metrics: any): any[] {
         const recommendations = [];
 
-        if (metrics.quality?.codeChurn?.rate > 0.3) {
+        const churnRate = metrics.quality?.codeChurn?.rate || 0;
+        const duplicationRate = metrics.quality?.duplication?.cloneRate || 0;
+        const roi = metrics.roi?.overallROI || 0;
+
+        if (churnRate > 0.3) {
             recommendations.push({
                 icon: '⚠️',
-                text: 'High code churn detected. Provide AI prompt training to reduce rewrites.'
+                title: 'High Code Churn Detected',
+                text: 'Provide clearer prompts and context to AI to reduce rewrites. Consider pair programming sessions to improve AI usage.'
             });
         }
 
-        if (metrics.quality?.duplication?.cloneRate > 0.15) {
+        if (duplicationRate > 0.15) {
             recommendations.push({
                 icon: '🔄',
-                text: 'Excessive duplication. Enable DRY principle checks in AI workflow.'
+                title: 'Code Duplication Increasing',
+                text: 'Enable DRY principle checks. Review AI-generated code for abstractions before accepting.'
             });
         }
 
-        if (metrics.roi?.overallROI < 1) {
+        if (roi < 1) {
             recommendations.push({
                 icon: '💰',
-                text: 'Negative ROI. Focus AI usage on boilerplate and test generation only.'
+                title: 'ROI Below Expectations',
+                text: 'Focus AI usage on boilerplate code, tests, and documentation. Avoid using AI for complex business logic.'
+            });
+        } else {
+            recommendations.push({
+                icon: '✨',
+                title: 'Positive Impact',
+                text: 'Continue current usage patterns. Consider expanding AI usage to similar tasks.'
             });
         }
 
         recommendations.push({
             icon: '🎓',
-            text: 'Junior developers show highest gains. Pair them with AI for learning.'
+            title: 'Best Practices',
+            text: 'Junior developers often see highest gains. Use AI as a learning tool with proper review processes.'
         });
 
         return recommendations;
@@ -261,17 +398,20 @@ export class DashboardProvider {
     private generateAlerts(metrics: any): any[] {
         const alerts = [];
 
-        if (metrics.quality?.codeChurn?.rate > 0.4) {
+        const churnRate = metrics.quality?.codeChurn?.rate || 0;
+        const roi = metrics.roi?.overallROI || 0;
+
+        if (churnRate > 0.4) {
             alerts.push({
                 type: 'error',
-                message: 'Critical: 40%+ of AI code is being rewritten. Immediate action required.'
+                message: 'Critical: Over 40% of AI code is being rewritten. Review AI usage patterns immediately.'
             });
         }
 
-        if (metrics.roi?.overallROI < 0) {
+        if (roi < 0) {
             alerts.push({
                 type: 'warning',
-                message: 'AI is making your team SLOWER. Review usage patterns immediately.'
+                message: 'AI is currently slowing down development. Consider adjusting usage patterns or providing team training.'
             });
         }
 

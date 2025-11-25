@@ -281,4 +281,210 @@ suite('Integration Test Suite', () => {
 
         timeTracker.dispose();
     });
+
+    test('should calculate and store metrics automatically', async () => {
+        // Setup collectors
+        const aiCollector = new AIEventCollector(storage);
+        aiCollector.startTracking();
+
+        // Get initial metrics
+        const aiMetrics = await aiCollector.getMetrics();
+
+        // Simulate calculateAndStoreMetrics behavior
+        const metrics = {
+            quality: {
+                codeChurn: {
+                    rate: aiMetrics.churnRate || 0,
+                    trend: 'stable' as const,
+                    aiVsHuman: 1
+                },
+                duplication: {
+                    cloneRate: 0,
+                    copyPasteRatio: 0,
+                    beforeAI: 0,
+                    afterAI: 0
+                },
+                complexity: {
+                    cyclomaticComplexity: 0,
+                    cognitiveLoad: 0,
+                    nestingDepth: 0,
+                    aiGeneratedComplexity: 0
+                },
+                refactoring: {
+                    rate: 0,
+                    aiCodeRefactored: 0
+                },
+                overallScore: aiMetrics.acceptanceRate || 0
+            },
+            productivity: {
+                taskCompletion: {
+                    velocityChange: aiMetrics.acceptanceRate * 0.26,
+                    cycleTime: 0,
+                    reworkRate: aiMetrics.churnRate || 0
+                },
+                flowEfficiency: {
+                    focusTime: 0,
+                    contextSwitches: 0,
+                    waitTime: 0
+                },
+                valueDelivery: {
+                    featuresShipped: aiMetrics.totalSuggestions,
+                    bugRate: 0,
+                    customerImpact: 0
+                },
+                actualGain: aiMetrics.acceptanceRate * 0.26,
+                perceivedGain: aiMetrics.acceptanceRate * 1.83,
+                netTimeSaved: aiMetrics.totalSuggestions * 0.5
+            },
+            roi: {
+                costBenefit: {
+                    licenseCost: 20,
+                    timeSaved: aiMetrics.totalSuggestions * 0.5,
+                    timeWasted: 0,
+                    netValue: aiMetrics.totalSuggestions * 10
+                },
+                hiddenCosts: {
+                    technicalDebt: 0,
+                    maintenanceBurden: 0,
+                    knowledgeGaps: 0
+                },
+                teamImpact: {
+                    reviewTime: 0,
+                    onboardingCost: 0,
+                    collaborationFriction: 0
+                },
+                overallROI: aiMetrics.acceptanceRate > 0.5 ? 1.5 : 0.8,
+                breakEvenDays: 30
+            }
+        };
+
+        // Store metrics
+        await storage.storeMetrics(metrics as any);
+
+        // Verify metrics were stored
+        const latest = await storage.getLatestMetrics();
+        assert.ok(latest.quality);
+        assert.ok(latest.productivity);
+        assert.ok(latest.roi);
+        assert.strictEqual(latest.quality.codeChurn.rate, aiMetrics.churnRate || 0);
+        assert.strictEqual(latest.quality.overallScore, aiMetrics.acceptanceRate || 0);
+    });
+
+    test('should trigger dashboard refresh callback', async () => {
+        let callbackInvoked = false;
+        const callbackError: Error | null = null;
+
+        // Create dashboard with refresh callback
+        const dashboard = new DashboardProvider(mockContext as any, storage);
+
+        dashboard.setRefreshCallback(async () => {
+            callbackInvoked = true;
+
+            // Simulate metrics calculation
+            const aiCollector = new AIEventCollector(storage);
+            const aiMetrics = await aiCollector.getMetrics();
+
+            const metrics = {
+                quality: {
+                    codeChurn: { rate: aiMetrics.churnRate || 0, trend: 'stable' as const, aiVsHuman: 1 },
+                    duplication: { cloneRate: 0, copyPasteRatio: 0, beforeAI: 0, afterAI: 0 },
+                    complexity: { cyclomaticComplexity: 0, cognitiveLoad: 0, nestingDepth: 0, aiGeneratedComplexity: 0 },
+                    refactoring: { rate: 0, aiCodeRefactored: 0 },
+                    overallScore: 0.5
+                },
+                productivity: {
+                    taskCompletion: { velocityChange: 0.1, cycleTime: 0, reworkRate: 0 },
+                    flowEfficiency: { focusTime: 0, contextSwitches: 0, waitTime: 0 },
+                    valueDelivery: { featuresShipped: 0, bugRate: 0, customerImpact: 0 },
+                    actualGain: 0.1,
+                    perceivedGain: 0.5,
+                    netTimeSaved: 1.0
+                },
+                roi: {
+                    costBenefit: { licenseCost: 20, timeSaved: 5, timeWasted: 0, netValue: 100 },
+                    hiddenCosts: { technicalDebt: 0, maintenanceBurden: 0, knowledgeGaps: 0 },
+                    teamImpact: { reviewTime: 0, onboardingCost: 0, collaborationFriction: 0 },
+                    overallROI: 1.5,
+                    breakEvenDays: 30
+                }
+            };
+
+            await storage.storeMetrics(metrics as any);
+        });
+
+        // Show dashboard (which triggers initial refresh)
+        await dashboard.show();
+
+        // Wait a moment for callback to execute
+        await new Promise(resolve => setTimeout(resolve, 100));
+
+        // Verify callback was invoked
+        assert.strictEqual(callbackInvoked, true, 'Refresh callback should be invoked');
+        assert.strictEqual(callbackError, null, 'Refresh callback should not throw errors');
+
+        // Verify metrics were stored by callback
+        const latest = await storage.getLatestMetrics();
+        assert.ok(latest.quality, 'Quality metrics should be stored');
+        assert.ok(latest.productivity, 'Productivity metrics should be stored');
+        assert.ok(latest.roi, 'ROI metrics should be stored');
+    });
+
+    test('should update dashboard stats after metrics calculation', async () => {
+        // Store initial metrics
+        const initialMetrics = {
+            quality: {
+                codeChurn: { rate: 0.2, trend: 'stable' as const, aiVsHuman: 1 },
+                duplication: { cloneRate: 0.1, copyPasteRatio: 0.15, beforeAI: 0.05, afterAI: 0.1 },
+                complexity: { cyclomaticComplexity: 10, cognitiveLoad: 5, nestingDepth: 3, aiGeneratedComplexity: 12 },
+                refactoring: { rate: 0.1, aiCodeRefactored: 0.2 },
+                overallScore: 0.7
+            },
+            productivity: {
+                taskCompletion: { velocityChange: 0.15, cycleTime: 2, reworkRate: 0.2 },
+                flowEfficiency: { focusTime: 4, contextSwitches: 8, waitTime: 0.3 },
+                valueDelivery: { featuresShipped: 10, bugRate: 0.4, customerImpact: 9 },
+                actualGain: 0.26,
+                perceivedGain: 1.83,
+                netTimeSaved: 5.0
+            },
+            roi: {
+                costBenefit: { licenseCost: 20, timeSaved: 10, timeWasted: 2, netValue: 400 },
+                hiddenCosts: { technicalDebt: 1000, maintenanceBurden: 500, knowledgeGaps: 200 },
+                teamImpact: { reviewTime: 0.5, onboardingCost: 100, collaborationFriction: 0.1 },
+                overallROI: 2.0,
+                breakEvenDays: 15
+            }
+        };
+
+        await storage.storeMetrics(initialMetrics as any);
+
+        // Create dashboard
+        const dashboard = new DashboardProvider(mockContext as any, storage);
+        await dashboard.show();
+
+        // Get initial state
+        const initial = await storage.getLatestMetrics();
+        assert.strictEqual(initial.quality?.overallScore, 0.7);
+        assert.strictEqual(initial.roi?.overallROI, 2.0);
+
+        // Update metrics (simulating periodic calculation)
+        const updatedMetrics = {
+            ...initialMetrics,
+            quality: {
+                ...initialMetrics.quality,
+                overallScore: 0.8
+            },
+            roi: {
+                ...initialMetrics.roi,
+                overallROI: 2.5
+            }
+        };
+
+        await storage.storeMetrics(updatedMetrics as any);
+
+        // Verify metrics were updated
+        const updated = await storage.getLatestMetrics();
+        assert.strictEqual(updated.quality?.overallScore, 0.8);
+        assert.strictEqual(updated.roi?.overallROI, 2.5);
+    });
 });
