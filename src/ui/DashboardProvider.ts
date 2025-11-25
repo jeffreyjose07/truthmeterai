@@ -95,6 +95,67 @@ export class DashboardProvider {
 
                 <div class="alert-banner" id="alertBanner" style="display: none;"></div>
 
+                <div class="methodology-section">
+                    <div class="methodology-header">
+                        <h2>
+                            <span class="methodology-icon">📖</span>
+                            How Metrics Are Generated
+                        </h2>
+                        <button class="methodology-toggle" onclick="toggleMethodology()" id="methodologyToggle">
+                            <span class="toggle-icon">▼</span>
+                            <span class="toggle-text">Hide Details</span>
+                        </button>
+                    </div>
+                    <div class="methodology-content" id="methodologyContent">
+                        <div class="methodology-grid">
+                            <div class="methodology-card">
+                                <h3>🔍 Data Collection</h3>
+                                <ul>
+                                    <li><strong>AI Detection:</strong> Automatically identifies AI-generated code by analyzing patterns like JSDoc comments, consistent formatting, and rapid text insertion</li>
+                                    <li><strong>Code Changes:</strong> Tracks all file modifications, additions, and deletions in real-time through VS Code's file system events</li>
+                                    <li><strong>Time Tracking:</strong> Monitors active coding sessions, detecting activity through editor focus and typing events</li>
+                                    <li><strong>Context Analysis:</strong> Analyzes code complexity, duplication patterns, and churn by examining file contents and git history</li>
+                                </ul>
+                            </div>
+
+                            <div class="methodology-card">
+                                <h3>📊 Metric Calculation</h3>
+                                <ul>
+                                    <li><strong>ROI Analysis:</strong> Compares time saved (code generation speed) vs. time spent (review, debugging, refactoring) multiplied by your hourly rate</li>
+                                    <li><strong>Code Churn:</strong> Measures percentage of AI-generated code rewritten within 14 days, indicating code quality and appropriateness</li>
+                                    <li><strong>Duplication:</strong> Detects similar code patterns using hash-based analysis, comparing before/after AI adoption rates</li>
+                                    <li><strong>Quality Scores:</strong> Analyzes cyclomatic complexity, cognitive load, nesting depth, and refactoring frequency</li>
+                                </ul>
+                            </div>
+
+                            <div class="methodology-card">
+                                <h3>🔬 Research Foundation</h3>
+                                <ul>
+                                    <li><strong>GitClear 2024:</strong> Found 41% increase in code churn and technical debt with AI assistance</li>
+                                    <li><strong>Uplevel 2024:</strong> Documented gap between perceived (126-183%) and actual (0-26%) productivity gains</li>
+                                    <li><strong>Microsoft Research:</strong> Studies on developer productivity and AI coding assistant impact</li>
+                                    <li><strong>Industry Standards:</strong> DRY principle, cyclomatic complexity thresholds, code quality metrics</li>
+                                </ul>
+                            </div>
+
+                            <div class="methodology-card">
+                                <h3>🔒 Privacy & Storage</h3>
+                                <ul>
+                                    <li><strong>Local Only:</strong> All data stays on your machine - nothing sent to external servers</li>
+                                    <li><strong>Limited Storage:</strong> Keeps last 1000 events in circular buffer to prevent excessive memory use</li>
+                                    <li><strong>No Code Content:</strong> Stores only metadata (file types, line counts, timestamps) not actual code</li>
+                                    <li><strong>Exportable:</strong> Full control to export or clear your data at any time</li>
+                                </ul>
+                            </div>
+                        </div>
+
+                        <div class="methodology-note">
+                            <strong>💡 Note:</strong> Metrics are calculated based on actual workspace activity. Start coding with AI assistance to see real-time analysis.
+                            Each metric card below has detailed explanations - click "About this metric" or hover over ℹ️ icons for specifics.
+                        </div>
+                    </div>
+                </div>
+
                 <div id="loadingState" class="loading-state">
                     <div class="loading-spinner"></div>
                     <p>Collecting metrics data...</p>
@@ -348,6 +409,40 @@ Source: Microsoft Research, GitHub Copilot studies, GitClear 2024">ℹ️</span>
 
                 function exportReport() {
                     vscode.postMessage({ command: 'export' });
+                }
+
+                function toggleMethodology() {
+                    const content = document.getElementById('methodologyContent');
+                    const toggle = document.getElementById('methodologyToggle');
+                    const icon = toggle.querySelector('.toggle-icon');
+                    const text = toggle.querySelector('.toggle-text');
+
+                    if (content.style.display === 'none') {
+                        content.style.display = 'block';
+                        icon.textContent = '▼';
+                        text.textContent = 'Hide Details';
+                    } else {
+                        content.style.display = 'none';
+                        icon.textContent = '▶';
+                        text.textContent = 'Show Details';
+                    }
+                }
+
+                function toggleExplanation(button) {
+                    const card = button.closest('.metric-explanation');
+                    const content = card.querySelector('.explanation-content');
+                    const icon = button.querySelector('.toggle-icon');
+                    const text = button.querySelector('.toggle-text');
+
+                    if (content.style.display === 'none' || content.style.display === '') {
+                        content.style.display = 'block';
+                        icon.textContent = '▼';
+                        text.textContent = 'Hide details';
+                    } else {
+                        content.style.display = 'none';
+                        icon.textContent = '▶';
+                        text.textContent = 'About this metric';
+                    }
                 }
 
                 window.addEventListener('message', event => {
