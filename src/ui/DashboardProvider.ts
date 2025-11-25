@@ -119,6 +119,47 @@ export class DashboardProvider {
                                 </div>
                             </div>
                             <div class="card-footer" id="roiInsight"></div>
+                            <div class="metric-explanation">
+                                <button class="explanation-toggle" onclick="toggleExplanation(this)">
+                                    <span class="toggle-icon">▶</span>
+                                    <span class="toggle-text">About this metric</span>
+                                </button>
+                                <div class="explanation-content">
+                                    <div class="explanation-section">
+                                        <strong>What it measures:</strong>
+                                        <p>The actual productivity impact of AI coding assistance, accounting for both time saved and time wasted.</p>
+                                    </div>
+                                    <div class="explanation-section">
+                                        <strong>How it's calculated:</strong>
+                                        <ul>
+                                            <li><strong>Time Saved:</strong> Hours saved from faster code generation</li>
+                                            <li><strong>Time Wasted:</strong> Hours spent fixing, refactoring, and reviewing AI code</li>
+                                            <li><strong>Cost-Benefit:</strong> (Time Saved - Time Wasted) × Hourly Rate - License Cost</li>
+                                            <li><strong>ROI:</strong> Cost-Benefit / (License Cost + Hidden Costs)</li>
+                                        </ul>
+                                    </div>
+                                    <div class="explanation-section">
+                                        <strong>Research basis:</strong>
+                                        <ul>
+                                            <li>Studies show perceived gains (126-183%) differ significantly from actual gains (0-26%)</li>
+                                            <li>GitClear research found AI code requires more rework and generates technical debt</li>
+                                            <li>Uplevel data shows 41% more code churn with AI assistance</li>
+                                        </ul>
+                                    </div>
+                                    <div class="explanation-section">
+                                        <strong>Interpretation:</strong>
+                                        <ul>
+                                            <li><span class="value-excellent">&gt;150%:</span> Excellent ROI, AI is highly beneficial</li>
+                                            <li><span class="value-good">100-150%:</span> Good ROI, positive impact</li>
+                                            <li><span class="value-marginal">50-100%:</span> Marginal ROI, room for improvement</li>
+                                            <li><span class="value-poor">&lt;50%:</span> Poor ROI, reconsider AI usage patterns</li>
+                                        </ul>
+                                    </div>
+                                    <div class="explanation-source">
+                                        <em>Source: GitClear 2024, Uplevel 2024, Microsoft Research</em>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
 
                         <div class="metric-card card-warning">
@@ -134,6 +175,54 @@ export class DashboardProvider {
                                 <div class="metric-label">Code rewritten within 14 days</div>
                             </div>
                             <div class="card-footer" id="churnInsight"></div>
+                            <div class="metric-explanation">
+                                <button class="explanation-toggle" onclick="toggleExplanation(this)">
+                                    <span class="toggle-icon">▶</span>
+                                    <span class="toggle-text">About this metric</span>
+                                </button>
+                                <div class="explanation-content">
+                                    <div class="explanation-section">
+                                        <strong>What it measures:</strong>
+                                        <p>Percentage of AI-generated code that gets rewritten or deleted within 14 days of creation.</p>
+                                    </div>
+                                    <div class="explanation-section">
+                                        <strong>How it's calculated:</strong>
+                                        <ul>
+                                            <li>Track all AI-generated code additions</li>
+                                            <li>Monitor modifications/deletions within 14-day window</li>
+                                            <li><strong>Churn Rate =</strong> (Lines Changed or Deleted) / (Total Lines Added) × 100%</li>
+                                        </ul>
+                                    </div>
+                                    <div class="explanation-section">
+                                        <strong>Research basis:</strong>
+                                        <ul>
+                                            <li>GitClear found 41% more code churn with AI assistance</li>
+                                            <li>Higher churn indicates AI-generated code needs significant rework</li>
+                                            <li>Suggests AI may not fully understand context or requirements</li>
+                                        </ul>
+                                    </div>
+                                    <div class="explanation-section">
+                                        <strong>Interpretation:</strong>
+                                        <ul>
+                                            <li><span class="value-excellent">0-15%:</span> Excellent - Code is stable and well-suited</li>
+                                            <li><span class="value-good">15-30%:</span> Good - Normal amount of refinement</li>
+                                            <li><span class="value-marginal">30-50%:</span> Warning - Significant rework needed</li>
+                                            <li><span class="value-poor">&gt;50%:</span> Critical - AI output may not be appropriate for task</li>
+                                        </ul>
+                                    </div>
+                                    <div class="explanation-section">
+                                        <strong>Why it matters:</strong>
+                                        <ul>
+                                            <li>High churn wastes developer time on rework</li>
+                                            <li>Indicates poor prompt quality or task complexity</li>
+                                            <li>May signal that AI is being used for inappropriate tasks</li>
+                                        </ul>
+                                    </div>
+                                    <div class="explanation-source">
+                                        <em>Source: GitClear 2024, Uplevel 2024</em>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
 
                         <div class="metric-card card-danger">
@@ -141,6 +230,40 @@ export class DashboardProvider {
                                 <div class="card-title">
                                     <span class="card-icon">📋</span>
                                     <span>Code Duplication</span>
+                                    <span class="info-icon" title="Code Duplication Metric
+
+What it measures: Increase in duplicated or copy-pasted code patterns after AI adoption.
+
+How it's calculated:
+• Baseline: Measure duplication rate before AI usage
+• Current: Measure duplication rate with AI
+• Increase Factor = Current Duplication / Baseline Duplication
+• Also tracks copy-paste ratio and clone detection
+
+Research basis:
+• Studies show AI can generate similar patterns repeatedly
+• Lack of context awareness leads to duplication
+• Copy-paste mentality when accepting AI suggestions
+• Technical debt accumulates from repetitive code
+
+Interpretation:
+• 1.0x: No change - AI maintains code quality
+• 1.0-1.5x: Acceptable - Minor increase
+• 1.5-2.5x: Warning - Significant duplication emerging
+• >2.5x: Critical - Technical debt accumulating rapidly
+
+Why it matters:
+• Duplicated code is harder to maintain
+• Bug fixes must be applied in multiple places
+• Increases codebase size without adding value
+• Violates DRY (Don't Repeat Yourself) principle
+
+Best practices:
+• Review AI suggestions for existing patterns
+• Refactor duplicates into reusable functions
+• Provide better context in AI prompts
+
+Source: Industry best practices, DRY principle">ℹ️</span>
                                 </div>
                                 <span class="metric-trend" id="duplicationTrend">—</span>
                             </div>
@@ -156,6 +279,44 @@ export class DashboardProvider {
                                 <div class="card-title">
                                     <span class="card-icon">⏱️</span>
                                     <span>Time Impact</span>
+                                    <span class="info-icon" title="Net Time Impact Metric
+
+What it measures: Actual hours saved or lost per week when using AI coding assistants.
+
+How it's calculated:
+• Time Saved: Code generation speed × Acceptance rate
+• Time Spent: Code review + Bug fixes + Refactoring + Context switching
+• Net Time = Time Saved - Time Spent
+• Normalized to hours per week
+
+Research basis:
+• Multiple studies show perception vs. reality gap
+• Developers feel 126-183% more productive
+• Actual measurements show 0-26% productivity gain
+• Additional time spent on:
+  - Reviewing AI suggestions: ~20-30% overhead
+  - Fixing AI bugs: ~15-25% of generated code
+  - Refactoring poor patterns: ~10-20% of code
+
+Interpretation:
+• >5h/week: Excellent - Significant time savings
+• 2-5h/week: Good - Notable productivity boost
+• 0-2h/week: Marginal - Small benefit
+• <0h/week: Negative - AI is slowing you down
+
+Why perception differs from reality:
+• Fast code generation feels productive
+• Hidden costs in review and rework
+• Context switching overhead not noticed
+• Comparison to typing speed, not thinking time
+
+Actions for improvement:
+• Focus AI on boilerplate and repetitive tasks
+• Improve prompt engineering
+• Set up better review processes
+• Avoid AI for complex business logic
+
+Source: Microsoft Research, GitHub Copilot studies, GitClear 2024">ℹ️</span>
                                 </div>
                                 <span class="metric-trend" id="timeTrend">—</span>
                             </div>
@@ -443,7 +604,7 @@ export class DashboardProvider {
         await vscode.workspace.applyEdit(edit);
     }
 
-    public showReport(report: any) {
+    public showReport(_report: any) {
         vscode.window.showInformationMessage('Report generated successfully');
     }
 }
