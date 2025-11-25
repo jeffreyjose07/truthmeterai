@@ -58,11 +58,16 @@ export async function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(
         vscode.commands.registerCommand('aiMetrics.showDashboard', async () => {
             try {
-                const dash = await getDashboard(context);
+                // Ensure tracking is started first
                 await ensureTracking(context);
+                
+                const dash = await getDashboard(context);
 
                 // Calculate and store fresh metrics before showing dashboard
                 await calculateAndStoreMetrics(context);
+
+                // Small delay to ensure metrics are stored
+                await new Promise(resolve => setTimeout(resolve, 100));
 
                 dash.show();
             } catch (error) {
@@ -223,17 +228,31 @@ async function getStatusBar(context: vscode.ExtensionContext): Promise<StatusBar
  * FIX #5: Progressive loading
  * Start tracking only when needed
  */
+// Track if we've already started tracking to avoid duplicate initialization
+let trackingStarted = false;
+
 async function ensureTracking(context: vscode.ExtensionContext) {
+    // Avoid starting tracking multiple times
+    if (trackingStarted) {
+        logger.info('Tracking already started, skipping re-initialization');
+        return;
+    }
+
+    logger.info('Starting tracking for the first time...');
     const collectors = await getCollectors(context);
 
-    if (!collectors.aiCollector) {
-        return; // Already started
+    if (!collectors.aiCollector || !collectors.codeCollector || !collectors.timeTracker) {
+        logger.error('Collectors not initialized properly');
+        return;
     }
 
     // Start tracking (lightweight - just event listeners)
-    collectors.aiCollector!.startTracking();
-    collectors.codeCollector!.startTracking();
-    collectors.timeTracker!.startTracking();
+    collectors.aiCollector.startTracking();
+    collectors.codeCollector.startTracking();
+    collectors.timeTracker.startTracking();
+
+    trackingStarted = true;
+    logger.info('Tracking started successfully!');
 
     // Git analyzer is expensive - delay it
     setTimeout(async () => {
@@ -282,8 +301,10 @@ async function calculateAndStoreMetrics(context: vscode.ExtensionContext): Promi
         const stor = await getStorage(context);
         const collectors = await getCollectors(context);
 
-        // Get quick metrics from collectors
+        // Get quick metrics from collectors (will return zeros if no activity yet)
         const aiMetrics = await collectors.aiCollector!.getMetrics();
+        
+        logger.info(`Calculating metrics: ${aiMetrics.totalSuggestions} suggestions, ${aiMetrics.acceptanceRate} acceptance rate`);
 
         // Build AllMetrics object with available data
         const metrics: AllMetrics = {
@@ -353,9 +374,9 @@ async function calculateAndStoreMetrics(context: vscode.ExtensionContext): Promi
             }
         };
 
-        // Store the calculated metrics
+        // Always store metrics (even if all zeros) so dashboard has data structure
         await stor.storeMetrics(metrics);
-        logger.info('Metrics calculated and stored');
+        logger.info(`Metrics calculated and stored: ROI=${metrics.roi?.overallROI ?? 0}, Suggestions=${aiMetrics.totalSuggestions}, Acceptance=${aiMetrics.acceptanceRate}`);
     } catch (error) {
         logger.error('Error in calculateAndStoreMetrics', error);
         throw error;

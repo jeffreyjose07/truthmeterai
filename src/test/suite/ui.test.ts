@@ -273,4 +273,42 @@ suite('DashboardProvider Test Suite', () => {
         // Should work fine without callback
         assert.ok(true, 'Dashboard should work without refresh callback');
     });
+
+    test('should display dashboard with zero values', async () => {
+        // Store metrics with zero values (simulating initial state)
+        const zeroMetrics = {
+            quality: {
+                codeChurn: { rate: 0, trend: 'stable' as const, aiVsHuman: 1 },
+                duplication: { cloneRate: 0, copyPasteRatio: 0, beforeAI: 0, afterAI: 0 },
+                complexity: { cyclomaticComplexity: 0, cognitiveLoad: 0, nestingDepth: 0, aiGeneratedComplexity: 0 },
+                refactoring: { rate: 0, aiCodeRefactored: 0 },
+                overallScore: 0
+            },
+            productivity: {
+                taskCompletion: { velocityChange: 0, cycleTime: 0, reworkRate: 0 },
+                flowEfficiency: { focusTime: 0, contextSwitches: 0, waitTime: 0 },
+                valueDelivery: { featuresShipped: 0, bugRate: 0, customerImpact: 0 },
+                actualGain: 0,
+                perceivedGain: 0,
+                netTimeSaved: 0
+            },
+            roi: {
+                costBenefit: { licenseCost: 20, timeSaved: 0, timeWasted: 0, netValue: 0 },
+                hiddenCosts: { technicalDebt: 0, maintenanceBurden: 0, knowledgeGaps: 0 },
+                teamImpact: { reviewTime: 0, onboardingCost: 0, collaborationFriction: 0 },
+                overallROI: 0.8,
+                breakEvenDays: 30
+            }
+        };
+
+        await storage.storeMetrics(zeroMetrics as any);
+        await dashboard.show();
+
+        // Dashboard should display even with zero values
+        const latest = await storage.getLatestMetrics();
+        assert.ok(latest, 'Metrics should be stored');
+        assert.strictEqual(latest.roi?.overallROI, 0.8, 'ROI should be stored');
+        assert.strictEqual(latest.quality?.codeChurn?.rate, 0, 'Churn rate should be 0');
+        assert.strictEqual(latest.productivity?.netTimeSaved, 0, 'Net time saved should be 0');
+    });
 });

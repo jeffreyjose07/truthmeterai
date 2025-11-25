@@ -3,14 +3,22 @@ import { LocalStorage } from '../storage/LocalStorage';
 import { AIEvent } from '../types/events';
 
 /**
- * OPTIMIZED VERSION of AIEventCollector
+ * AIEventCollector - Tracks AI-generated code changes and usage patterns
+ *
+ * Features:
+ * - Detects AI-generated code in editor changes
+ * - Monitors external file changes (terminal/CLI writes)
+ * - Tracks code churn and acceptance rates
+ * - Provides performance metrics
  *
  * Optimizations:
- * 1. Circular buffer (fixed memory)
- * 2. Debounced event processing
- * 3. Proper timer cleanup
- * 4. Batched storage writes
- * 5. WeakMap for document caching
+ * 1. Circular buffer (fixed memory) - prevents unbounded growth
+ * 2. Debounced event processing - reduces CPU usage
+ * 3. Proper timer cleanup - prevents memory leaks
+ * 4. Batched storage writes - reduces I/O operations
+ * 5. WeakMap for document caching - automatic cleanup
+ * 6. LRU file cache - bounded memory usage
+ * 7. Per-document throttling - accurate rate limiting
  */
 export class AIEventCollector {
     // Circular buffer for events (OPTIMIZATION 1)
@@ -19,7 +27,7 @@ export class AIEventCollector {
     private readonly MAX_EVENTS = 1000;  // ~100KB max memory
 
     private currentSession: string;
-    private lastSuggestion: any = null;
+    private lastSuggestion: AIEvent | null = null;
 
     // Timer management (OPTIMIZATION 3)
     private pendingTimers: Set<NodeJS.Timeout> = new Set();
@@ -35,11 +43,16 @@ export class AIEventCollector {
     // Throttling
     private lastStatusUpdate: number = 0;
     private lastChangeTime: number = 0;
+    private lastChangeTimeByDocument: Map<string, number> = new Map();
 
     // File system watcher for external changes
     private fileWatcher?: vscode.FileSystemWatcher;
     private fileContentCache: Map<string, { content: string; timestamp: number; size: number }> = new Map();
     private fileChangeDebouncers: Map<string, NodeJS.Timeout> = new Map();
+
+    // Directories to exclude from file watching (performance optimization)
+    private readonly EXCLUDED_DIRECTORIES = ['node_modules', '.git', 'dist', 'build', 'out'];
+    // Cache configuration
     private readonly CACHE_TTL = 30000; // 30 seconds
     private readonly FILE_CHANGE_DEBOUNCE = 1000; // 1 second debounce for file changes
     private readonly MAX_CACHE_SIZE = 50; // Maximum number of files to cache
@@ -48,12 +61,40 @@ export class AIEventCollector {
     private lastCacheCleanup: number = 0;
     private readonly CACHE_CLEANUP_INTERVAL = 60000; // Clean cache every minute
 
+    // Throttling constants
+    private readonly DEBOUNCE_DELAY = 300; // ms - wait after last keystroke
+    private readonly THROTTLE_INTERVAL = 1000; // ms - max once per second per document
+    private readonly STATUS_UPDATE_INTERVAL = 10000; // ms - update status bar every 10s
+    private readonly MODIFICATION_CHECK_DELAY = 5000; // ms - check modifications after 5s
+    private readonly FILE_WRITE_WAIT = 200; // ms - wait for file write to complete
+
+    // AI detection thresholds
+    private readonly MIN_INSERTION_SIZE = 30; // chars - minimum for AI detection
+    private readonly MIN_MULTI_CHANGE_SIZE = 20; // chars - for multiple changes
+    private readonly MIN_RAPID_TYPING_SIZE = 20; // chars - for rapid typing detection
+    private readonly MIN_BLOCK_INSERTION = 40; // chars - single large block
+    private readonly MIN_MULTILINE_SIZE = 25; // chars - multi-line additions
+    private readonly MIN_RECENT_ACTIVITY_SIZE = 15; // chars - with recent AI activity
+    private readonly DELETION_RATIO_THRESHOLD = 0.3; // 30% - max deletion ratio for AI
+    private readonly RAPID_TYPING_WINDOW = 500; // ms - window for rapid typing
+
+    /**
+     * Creates a new AIEventCollector instance
+     * @param storage - LocalStorage instance for persisting events
+     */
     constructor(private storage: LocalStorage) {
         this.currentSession = this.generateSessionId();
         this.events = new Array(this.MAX_EVENTS);
         this.startBatchWriter();
     }
 
+    /**
+     * Starts tracking AI events from multiple sources:
+     * - Editor text document changes
+     * - File system changes (external writes)
+     * - Inline suggestions
+     * - Document saves
+     */
     startTracking() {
         this.trackCascadeEvents();
         this.trackDocumentChangesDebounced();  // OPTIMIZED
@@ -77,12 +118,12 @@ export class AIEventCollector {
                 this.pendingTimers.delete(existing);
             }
 
-            // Debounce: wait 300ms after last keystroke
+            // Debounce: wait after last keystroke
             const timer = setTimeout(() => {
                 this.processDocumentChange(event);
                 this.debouncers.delete(uri);
                 this.pendingTimers.delete(timer);
-            }, 300);
+            }, this.DEBOUNCE_DELAY);
 
             this.debouncers.set(uri, timer);
             this.pendingTimers.add(timer);
@@ -90,10 +131,17 @@ export class AIEventCollector {
     }
 
     private processDocumentChange(event: vscode.TextDocumentChangeEvent) {
-        // Throttle: max once per second per document
+        // Throttle: max once per second per document (per-document throttling)
+        const uri = event.document.uri.toString();
         const now = Date.now();
-        if (now - this.lastChangeTime < 1000) { return; }
-        this.lastChangeTime = now;
+        const lastChange = this.lastChangeTimeByDocument.get(uri) || 0;
+
+        if (now - lastChange < this.THROTTLE_INTERVAL) {
+            return;
+        }
+
+        this.lastChangeTimeByDocument.set(uri, now);
+        this.lastChangeTime = now; // Keep global for backward compatibility
 
         if (this.isAIGenerated(event)) {
             const aiEvent: AIEvent = {
@@ -138,10 +186,12 @@ export class AIEventCollector {
     }
 
     private trackInlineSuggestions() {
-        const disposable = vscode.languages.registerInlineCompletionItemProvider(
+        // Register inline completion provider to track when suggestions are shown
+        // Note: Disposable is intentionally not stored as it's managed by VS Code lifecycle
+        vscode.languages.registerInlineCompletionItemProvider(
             { pattern: '**/*' },
             {
-                provideInlineCompletionItems: async (document, position, context, token) => {
+                provideInlineCompletionItems: async (document, position) => {
                     this.recordSuggestionShown(document, position);
                     return undefined;
                 }
@@ -158,7 +208,7 @@ export class AIEventCollector {
                 try {
                     const content = document.getText();
                     // Skip very large files
-                    if (content.length > this.MAX_FILE_SIZE) {return;}
+                    if (content.length > this.MAX_FILE_SIZE) { return; }
 
                     this.updateFileCache(
                         document.uri.toString(),
@@ -178,7 +228,7 @@ export class AIEventCollector {
         this.eventIndex = (this.eventIndex + 1) % this.MAX_EVENTS;
 
         // Throttled status update
-        if (Date.now() - this.lastStatusUpdate > 10000) {
+        if (Date.now() - this.lastStatusUpdate > this.STATUS_UPDATE_INTERVAL) {
             this.lastStatusUpdate = Date.now();
             // Signal status bar update needed
         }
@@ -197,14 +247,20 @@ export class AIEventCollector {
         for (let i = 0; i < totalEvents; i++) {
             const idx = (startIdx - 1 - i + totalEvents) % totalEvents;
             const event = this.events[idx];
-            if (event === undefined) {continue;}
-            if (event.timestamp <= cutoff) {break;} // Events are ordered, can early exit
+            if (event === undefined) { continue; }
+            if (event.timestamp <= cutoff) { break; } // Events are ordered, can early exit
             result.push(event);
         }
 
         return result.reverse(); // Return in chronological order
     }
 
+    /**
+     * Determines if a document change was likely generated by AI
+     * Uses multiple heuristics to detect AI-generated code patterns
+     * @param event - The document change event to analyze
+     * @returns true if the change appears to be AI-generated
+     */
     private isAIGenerated(event: vscode.TextDocumentChangeEvent): boolean {
         const changes = event.contentChanges;
         if (changes.length === 0) { return false; }
@@ -212,17 +268,16 @@ export class AIEventCollector {
         // Calculate total change size
         const totalInserted = changes.reduce((sum, change) => sum + change.text.length, 0);
         const totalDeleted = changes.reduce((sum, change) => sum + change.rangeLength, 0);
-        const netChange = totalInserted - totalDeleted;
 
-        // Heuristic 1: Large insertions (>30 chars) with minimal deletion
-        // AI often adds code without deleting much (lowered threshold from 50 to 30)
-        if (totalInserted > 30 && totalDeleted < totalInserted * 0.3) {
+        // Heuristic 1: Large insertions with minimal deletion
+        // AI often adds code without deleting much
+        if (totalInserted > this.MIN_INSERTION_SIZE &&
+            totalDeleted < totalInserted * this.DELETION_RATIO_THRESHOLD) {
             return true;
         }
 
         // Heuristic 2: Multiple changes in quick succession (AI streaming)
-        // Lowered threshold to catch more AI activity
-        if (changes.length > 1 && totalInserted > 20) {
+        if (changes.length > 1 && totalInserted > this.MIN_MULTI_CHANGE_SIZE) {
             return true;
         }
 
@@ -232,32 +287,38 @@ export class AIEventCollector {
             return true;
         }
 
-        // Heuristic 4: Recent AI activity context (more lenient)
-        if (this.checkRecentAIActivity() && totalInserted > 15) {
+        // Heuristic 4: Recent AI activity context
+        if (this.checkRecentAIActivity() && totalInserted > this.MIN_RECENT_ACTIVITY_SIZE) {
             return true;
         }
 
         // Heuristic 5: Rapid typing pattern (AI generates faster than humans)
-        // More lenient timing window
         const now = Date.now();
-        if (now - this.lastChangeTime < 500 && totalInserted > 20) {
+        if (now - this.lastChangeTime < this.RAPID_TYPING_WINDOW &&
+            totalInserted > this.MIN_RAPID_TYPING_SIZE) {
             return true;
         }
 
         // Heuristic 6: Single large block insertion (common with AI)
-        if (changes.length === 1 && totalInserted > 40 && totalDeleted === 0) {
+        if (changes.length === 1 && totalInserted > this.MIN_BLOCK_INSERTION && totalDeleted === 0) {
             return true;
         }
 
         // Heuristic 7: Multi-line additions (AI often adds complete blocks)
         const hasMultipleLines = changeText.split('\n').length > 2;
-        if (hasMultipleLines && totalInserted > 25) {
+        if (hasMultipleLines && totalInserted > this.MIN_MULTILINE_SIZE) {
             return true;
         }
 
         return false;
     }
 
+    /**
+     * Detects AI-generated code patterns using regex matching
+     * Checks for common AI code structures (functions, classes, error handling, etc.)
+     * @param text - The text to analyze
+     * @returns true if AI patterns are detected
+     */
     private detectAIPatterns(text: string): boolean {
         if (!text || text.trim().length === 0) { return false; }
 
@@ -400,33 +461,45 @@ export class AIEventCollector {
         return false;
     }
 
-    // OPTIMIZATION 3: Track timers for cleanup
+    /**
+     * Track modifications to AI-generated code after a delay
+     * This helps detect code churn (how much AI code was modified after acceptance)
+     */
     private trackModifications(uri: string, event: AIEvent) {
-        const timer = setTimeout(() => {
-            vscode.workspace.openTextDocument(vscode.Uri.parse(uri)).then(doc => {
+        const timer = setTimeout(async () => {
+            try {
+                const doc = await vscode.workspace.openTextDocument(vscode.Uri.parse(uri));
                 const currentText = doc.getText();
-                const modifications = this.detectModifications(currentText, event);
+                const modifications = this.calculateModifications(currentText, event);
 
                 if (modifications > 0) {
                     event.modificationTime = Date.now() - event.timestamp;
-                    event.acceptedLength = event.suggestionLength - modifications;
+                    // Accepted length is the original minus modifications
+                    event.acceptedLength = Math.max(0, event.suggestionLength - modifications);
 
                     const churnRate = modifications / event.suggestionLength;
                     this.recordChurn(churnRate);
                 }
-
+            } catch (error) {
+                // Document might be closed or inaccessible - ignore
+            } finally {
                 this.pendingTimers.delete(timer);
-            }, () => {
-                // Document might be closed (error callback)
-                this.pendingTimers.delete(timer);
-            });
-        }, 5000);
+            }
+        }, this.MODIFICATION_CHECK_DELAY);
 
         this.pendingTimers.add(timer);
     }
 
-    private detectModifications(currentText: string, originalEvent: AIEvent): number {
-        return Math.abs(currentText.length - originalEvent.suggestionLength);
+    /**
+     * Calculate how much the code was modified after AI suggestion
+     * This is a simplified heuristic - in reality, we'd need diff algorithms
+     */
+    private calculateModifications(currentText: string, originalEvent: AIEvent): number {
+        // Simplified: compare text length difference
+        // Note: This is a heuristic and may not be 100% accurate
+        // A proper implementation would use diff algorithms
+        const lengthDiff = Math.abs(currentText.length - originalEvent.contextSize);
+        return lengthDiff;
     }
 
     // OPTIMIZATION 4: Queue writes instead of immediate
@@ -470,12 +543,12 @@ export class AIEventCollector {
     }
 
     private checkRecentAIActivity(): boolean {
-        const recentThreshold = Date.now() - 10000;
+        // Check for AI activity in the last ~10 seconds
         const recentEvents = this.getRecentEvents(0.17); // ~10 seconds
         return recentEvents.length > 0;
     }
 
-    private recordAIUsage(markers: any[]) {
+    private recordAIUsage(markers: Array<{ line: number; content: string }>) {
         this.queueWrite('ai_usage', {
             timestamp: Date.now(),
             markers: markers.length,
@@ -496,6 +569,10 @@ export class AIEventCollector {
         return `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     }
 
+    /**
+     * Gets aggregated metrics about AI usage
+     * @returns Promise resolving to metrics object
+     */
     async getMetrics() {
         const events = this.getRecentEvents(60); // Last hour
         const totalSuggestions = events.filter(e => e.type === 'suggestion').length;
@@ -531,6 +608,10 @@ export class AIEventCollector {
         return sessions.size;
     }
 
+    /**
+     * Gets quick stats for status bar display
+     * @returns Quick stats object with recent activity
+     */
     getQuickStats() {
         const recentEvents = this.getRecentEvents(5);
 
@@ -541,7 +622,10 @@ export class AIEventCollector {
         };
     }
 
-    // OPTIMIZATION 3: Proper cleanup
+    /**
+     * Disposes of all resources and cleans up timers, watchers, and caches
+     * Should be called when the collector is no longer needed
+     */
     dispose() {
         // Clear all pending timers
         this.pendingTimers.forEach(timer => clearTimeout(timer));
@@ -575,13 +659,19 @@ export class AIEventCollector {
 
         // Clear cache
         this.fileContentCache.clear();
+
+        // Clear per-document throttling
+        this.lastChangeTimeByDocument.clear();
     }
 
-    // Performance monitoring
+    /**
+     * Gets performance metrics for monitoring and debugging
+     * @returns Performance metrics including memory usage and cache statistics
+     */
     getPerformanceMetrics() {
         let eventCount = 0;
         for (const e of this.events) {
-            if (e !== undefined) {eventCount++;}
+            if (e !== undefined) { eventCount++; }
         }
 
         const cacheSize = Array.from(this.fileContentCache.values())
@@ -669,12 +759,12 @@ export class AIEventCollector {
     private async initializeFileCache() {
         let count = 0;
         for (const document of vscode.workspace.textDocuments) {
-            if (count >= this.MAX_CACHE_SIZE) {break;} // Limit initial cache size
+            if (count >= this.MAX_CACHE_SIZE) { break; } // Limit initial cache size
 
             if (document.uri.scheme === 'file' && !document.isUntitled) {
                 try {
                     const content = document.getText();
-                    if (content.length > this.MAX_FILE_SIZE) {continue;} // Skip large files
+                    if (content.length > this.MAX_FILE_SIZE) { continue; } // Skip large files
 
                     this.fileContentCache.set(document.uri.toString(), {
                         content,
@@ -752,16 +842,12 @@ export class AIEventCollector {
             }
 
             // Wait a bit for file write to complete (especially for large files)
-            await new Promise(resolve => setTimeout(resolve, 200));
+            await new Promise(resolve => setTimeout(resolve, this.FILE_WRITE_WAIT));
 
             // Skip very large files to avoid memory issues
             const uriString = uri.toString();
-            if (uriString.includes('node_modules') ||
-                uriString.includes('.git') ||
-                uriString.includes('dist') ||
-                uriString.includes('build') ||
-                uriString.includes('out')) {
-                return; // Skip common large directories
+            if (this.EXCLUDED_DIRECTORIES.some(dir => uriString.includes(dir))) {
+                return; // Skip excluded directories for performance
             }
 
             // Read file content with size limit
@@ -844,10 +930,10 @@ export class AIEventCollector {
             this.updateFileCache(uriString, newContent, now);
 
         } catch (error) {
-            // File might be deleted or inaccessible, ignore
-            // Remove from cache if file no longer exists
+            // File might be deleted or inaccessible - remove from cache
             const uriString = uri.toString();
             this.fileContentCache.delete(uriString);
+            // Silently ignore errors to prevent disrupting user workflow
         }
     }
 

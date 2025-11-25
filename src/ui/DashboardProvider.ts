@@ -199,18 +199,25 @@ export class DashboardProvider {
                 function updateDashboard(data) {
                     hasData = data.hasData;
 
-                    if (!hasData) {
+                    // Always show metrics container if we have data structure (even if values are 0)
+                    // Only show loading if we truly have no metrics object at all
+                    if (hasData || (data.roi !== null || data.churn !== null || data.duplication !== null || data.netTime !== null)) {
+                        document.getElementById('loadingState').style.display = 'none';
+                        document.getElementById('metricsContainer').style.display = 'block';
+                    } else {
+                        // No data yet - show helpful message
                         document.getElementById('loadingState').style.display = 'flex';
                         document.getElementById('metricsContainer').style.display = 'none';
+                        const loadingMsg = document.querySelector('#loadingState p');
+                        if (loadingMsg) {
+                            loadingMsg.textContent = 'Tracking started! Make some code changes with AI assistance to see metrics.';
+                        }
                         return;
                     }
 
-                    document.getElementById('loadingState').style.display = 'none';
-                    document.getElementById('metricsContainer').style.display = 'block';
-
                     // Update ROI
                     const roiElement = document.getElementById('roiValue');
-                    if (data.roi !== null) {
+                    if (data.roi !== null && data.roi !== undefined) {
                         const roiValue = Math.round(data.roi * 100);
                         roiElement.textContent = (roiValue > 0 ? '+' : '') + roiValue + '%';
                         roiElement.className = 'metric-value ' + (roiValue > 0 ? 'positive' : 'negative');
@@ -230,7 +237,7 @@ export class DashboardProvider {
 
                     // Update Churn
                     const churnElement = document.getElementById('churnValue');
-                    if (data.churn !== null) {
+                    if (data.churn !== null && data.churn !== undefined) {
                         const churnValue = Math.round(data.churn * 100);
                         churnElement.textContent = churnValue + '%';
                         churnElement.className = 'metric-value ' + (churnValue > 30 ? 'negative' : 'positive');
@@ -244,7 +251,7 @@ export class DashboardProvider {
 
                     // Update Duplication
                     const dupElement = document.getElementById('duplicationValue');
-                    if (data.duplication !== null) {
+                    if (data.duplication !== null && data.duplication !== undefined) {
                         dupElement.textContent = data.duplication.toFixed(1) + 'x';
                         dupElement.className = 'metric-value ' + (data.duplication > 2 ? 'negative' : 'positive');
                         document.getElementById('duplicationTrend').textContent = data.duplication > 2 ? '↑' : '↓';
@@ -257,7 +264,7 @@ export class DashboardProvider {
 
                     // Update Time Impact
                     const timeElement = document.getElementById('timeValue');
-                    if (data.netTime !== null) {
+                    if (data.netTime !== null && data.netTime !== undefined) {
                         const hours = data.netTime.toFixed(1);
                         timeElement.textContent = (data.netTime > 0 ? '+' : '') + hours + 'h';
                         timeElement.className = 'metric-value ' + (data.netTime > 0 ? 'positive' : 'negative');
@@ -321,23 +328,29 @@ export class DashboardProvider {
 
         const metrics = await this.storage.getLatestMetrics();
 
-        // Check if we have actual data
+        console.log('[Dashboard] Retrieved metrics:', JSON.stringify(metrics, null, 2));
+
+        // Check if we have metrics data (even if values are 0, we have data structure)
+        // A metrics object exists if it has been calculated and stored
         const hasActualData = metrics && (
-            metrics.roi?.overallROI !== undefined ||
-            metrics.quality?.codeChurn?.rate !== undefined ||
-            metrics.quality?.duplication?.cloneRate !== undefined ||
-            metrics.productivity?.netTimeSaved !== undefined
+            (metrics.roi !== undefined && metrics.roi !== null) ||
+            (metrics.quality !== undefined && metrics.quality !== null) ||
+            (metrics.productivity !== undefined && metrics.productivity !== null)
         );
 
+        console.log('[Dashboard] hasActualData =', hasActualData);
+
+        // Always provide data structure, even if values are 0
+        // This allows the dashboard to display "0" values instead of showing loading state
         const dashboardData = {
             hasData: hasActualData,
-            roi: metrics.roi?.overallROI ?? null,
-            perceivedROI: metrics.productivity?.perceivedGain ?? null,
-            churn: metrics.quality?.codeChurn?.rate ?? null,
-            duplication: metrics.quality?.duplication?.cloneRate
+            roi: metrics?.roi?.overallROI ?? 0,
+            perceivedROI: metrics?.productivity?.perceivedGain ?? 0,
+            churn: metrics?.quality?.codeChurn?.rate ?? 0,
+            duplication: metrics?.quality?.duplication?.cloneRate
                 ? metrics.quality.duplication.cloneRate / (metrics.quality.duplication.beforeAI || 1)
-                : null,
-            netTime: metrics.productivity?.netTimeSaved ?? null,
+                : 0,
+            netTime: metrics?.productivity?.netTimeSaved ?? 0,
 
             recommendations: hasActualData ? this.generateRecommendations(metrics) : [],
             alerts: hasActualData ? this.generateAlerts(metrics) : []

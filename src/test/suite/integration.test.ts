@@ -429,6 +429,42 @@ suite('Integration Test Suite', () => {
         assert.ok(latest.roi, 'ROI metrics should be stored');
     });
 
+    test('should show dashboard with initial zero metrics', async () => {
+        // Test that dashboard displays even when all metrics are zero
+        const zeroMetrics = {
+            quality: {
+                codeChurn: { rate: 0, trend: 'stable' as const, aiVsHuman: 1 },
+                duplication: { cloneRate: 0, copyPasteRatio: 0, beforeAI: 0, afterAI: 0 },
+                complexity: { cyclomaticComplexity: 0, cognitiveLoad: 0, nestingDepth: 0, aiGeneratedComplexity: 0 },
+                refactoring: { rate: 0, aiCodeRefactored: 0 },
+                overallScore: 0
+            },
+            productivity: {
+                taskCompletion: { velocityChange: 0, cycleTime: 0, reworkRate: 0 },
+                flowEfficiency: { focusTime: 0, contextSwitches: 0, waitTime: 0 },
+                valueDelivery: { featuresShipped: 0, bugRate: 0, customerImpact: 0 },
+                actualGain: 0,
+                perceivedGain: 0,
+                netTimeSaved: 0
+            },
+            roi: {
+                costBenefit: { licenseCost: 20, timeSaved: 0, timeWasted: 0, netValue: 0 },
+                hiddenCosts: { technicalDebt: 0, maintenanceBurden: 0, knowledgeGaps: 0 },
+                teamImpact: { reviewTime: 0, onboardingCost: 0, collaborationFriction: 0 },
+                overallROI: 0.8,
+                breakEvenDays: 30
+            }
+        };
+
+        await storage.storeMetrics(zeroMetrics as any);
+        const dashboard = new DashboardProvider(mockContext as any, storage);
+        await dashboard.show();
+
+        const retrieved = await storage.getLatestMetrics();
+        assert.ok(retrieved);
+        assert.strictEqual(retrieved.roi?.overallROI, 0.8);
+    });
+
     test('should update dashboard stats after metrics calculation', async () => {
         // Store initial metrics
         const initialMetrics = {

@@ -135,6 +135,27 @@ suite('AIEventCollector Test Suite', () => {
         assert.strictEqual(typeof stats.recentSuggestions, 'number');
         assert.strictEqual(typeof stats.recentAcceptance, 'number');
     });
+
+    test('should return zero metrics when no activity', async () => {
+        // New collector with no activity should return zeros
+        const metrics = await collector.getMetrics();
+        
+        assert.strictEqual(metrics.totalSuggestions, 0);
+        assert.strictEqual(metrics.acceptanceRate, 0);
+        assert.strictEqual(metrics.churnRate, 0);
+        assert.strictEqual(metrics.sessionCount, 0);
+        assert.strictEqual(metrics.averageModificationTime, 0);
+    });
+
+    test('should handle multiple startTracking calls', () => {
+        // Should not throw when called multiple times
+        collector.startTracking();
+        collector.startTracking();
+        collector.startTracking();
+        
+        const stats = collector.getQuickStats();
+        assert.ok(stats);
+    });
 });
 
 suite('CodeChangeCollector Test Suite', () => {
