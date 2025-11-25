@@ -36,6 +36,18 @@ export class AIEventCollector {
     private lastStatusUpdate: number = 0;
     private lastChangeTime: number = 0;
 
+    // File system watcher for external changes
+    private fileWatcher?: vscode.FileSystemWatcher;
+    private fileContentCache: Map<string, { content: string; timestamp: number; size: number }> = new Map();
+    private fileChangeDebouncers: Map<string, NodeJS.Timeout> = new Map();
+    private readonly CACHE_TTL = 30000; // 30 seconds
+    private readonly FILE_CHANGE_DEBOUNCE = 1000; // 1 second debounce for file changes
+    private readonly MAX_CACHE_SIZE = 50; // Maximum number of files to cache
+    private readonly MAX_FILE_SIZE = 500000; // 500KB - skip files larger than this
+    private readonly MAX_PATTERN_CHECK_SIZE = 10000; // Only check first 10KB for patterns
+    private lastCacheCleanup: number = 0;
+    private readonly CACHE_CLEANUP_INTERVAL = 60000; // Clean cache every minute
+
     constructor(private storage: LocalStorage) {
         this.currentSession = this.generateSessionId();
         this.events = new Array(this.MAX_EVENTS);
@@ -46,6 +58,8 @@ export class AIEventCollector {
         this.trackCascadeEvents();
         this.trackDocumentChangesDebounced();  // OPTIMIZED
         this.trackInlineSuggestions();
+        this.trackFileSystemChanges();  // Track external file changes
+        this.trackDocumentSaves();  // Update cache on saves
     }
 
     // OPTIMIZATION 2: Debounced document tracking
@@ -54,7 +68,7 @@ export class AIEventCollector {
             const uri = event.document.uri.toString();
 
             // Skip non-file schemes
-            if (event.document.uri.scheme !== 'file') {return;}
+            if (event.document.uri.scheme !== 'file') { return; }
 
             // Clear existing debouncer
             const existing = this.debouncers.get(uri);
@@ -78,7 +92,7 @@ export class AIEventCollector {
     private processDocumentChange(event: vscode.TextDocumentChangeEvent) {
         // Throttle: max once per second per document
         const now = Date.now();
-        if (now - this.lastChangeTime < 1000) {return;}
+        if (now - this.lastChangeTime < 1000) { return; }
         this.lastChangeTime = now;
 
         if (this.isAIGenerated(event)) {
@@ -102,7 +116,7 @@ export class AIEventCollector {
 
     private trackCascadeEvents() {
         vscode.window.onDidChangeActiveTextEditor((editor) => {
-            if (!editor) {return;}
+            if (!editor) { return; }
 
             // Check cache first
             const cached = this.documentMetrics.get(editor.document);
@@ -135,6 +149,29 @@ export class AIEventCollector {
         );
     }
 
+    /**
+     * Track document saves to update file cache
+     */
+    private trackDocumentSaves() {
+        vscode.workspace.onDidSaveTextDocument(async (document) => {
+            if (document.uri.scheme === 'file' && !document.isUntitled) {
+                try {
+                    const content = document.getText();
+                    // Skip very large files
+                    if (content.length > this.MAX_FILE_SIZE) {return;}
+
+                    this.updateFileCache(
+                        document.uri.toString(),
+                        content,
+                        Date.now()
+                    );
+                } catch (error) {
+                    // Ignore errors
+                }
+            }
+        });
+    }
+
     // OPTIMIZATION 1: Add to circular buffer
     private addEvent(event: AIEvent) {
         this.events[this.eventIndex] = event;
@@ -147,49 +184,174 @@ export class AIEventCollector {
         }
     }
 
-    // Get recent events (filter circular buffer)
+    // Get recent events (filter circular buffer) - OPTIMIZED
     private getRecentEvents(minutes: number = 5): AIEvent[] {
         const cutoff = Date.now() - (minutes * 60 * 1000);
-        return this.events.filter((e): e is AIEvent =>
-            e !== undefined && e.timestamp > cutoff
-        );
+        const result: AIEvent[] = [];
+
+        // Iterate through circular buffer more efficiently
+        const startIdx = this.eventIndex;
+        const totalEvents = this.events.length;
+
+        // Check events in reverse order (newest first)
+        for (let i = 0; i < totalEvents; i++) {
+            const idx = (startIdx - 1 - i + totalEvents) % totalEvents;
+            const event = this.events[idx];
+            if (event === undefined) {continue;}
+            if (event.timestamp <= cutoff) {break;} // Events are ordered, can early exit
+            result.push(event);
+        }
+
+        return result.reverse(); // Return in chronological order
     }
 
     private isAIGenerated(event: vscode.TextDocumentChangeEvent): boolean {
-        const changeText = event.contentChanges[0]?.text || '';
+        const changes = event.contentChanges;
+        if (changes.length === 0) { return false; }
 
-        // Quick checks first (cheapest operations)
-        if (changeText.length > 100) {return true;}
-        if (this.checkRecentAIActivity()) {return true;}
+        // Calculate total change size
+        const totalInserted = changes.reduce((sum, change) => sum + change.text.length, 0);
+        const totalDeleted = changes.reduce((sum, change) => sum + change.rangeLength, 0);
+        const netChange = totalInserted - totalDeleted;
 
-        // Expensive pattern matching last
-        return this.detectAIPatterns(changeText);
+        // Heuristic 1: Large insertions (>30 chars) with minimal deletion
+        // AI often adds code without deleting much (lowered threshold from 50 to 30)
+        if (totalInserted > 30 && totalDeleted < totalInserted * 0.3) {
+            return true;
+        }
+
+        // Heuristic 2: Multiple changes in quick succession (AI streaming)
+        // Lowered threshold to catch more AI activity
+        if (changes.length > 1 && totalInserted > 20) {
+            return true;
+        }
+
+        // Heuristic 3: Check if change contains complete code structures
+        const changeText = changes.map(c => c.text).join('\n');
+        if (this.detectAIPatterns(changeText)) {
+            return true;
+        }
+
+        // Heuristic 4: Recent AI activity context (more lenient)
+        if (this.checkRecentAIActivity() && totalInserted > 15) {
+            return true;
+        }
+
+        // Heuristic 5: Rapid typing pattern (AI generates faster than humans)
+        // More lenient timing window
+        const now = Date.now();
+        if (now - this.lastChangeTime < 500 && totalInserted > 20) {
+            return true;
+        }
+
+        // Heuristic 6: Single large block insertion (common with AI)
+        if (changes.length === 1 && totalInserted > 40 && totalDeleted === 0) {
+            return true;
+        }
+
+        // Heuristic 7: Multi-line additions (AI often adds complete blocks)
+        const hasMultipleLines = changeText.split('\n').length > 2;
+        if (hasMultipleLines && totalInserted > 25) {
+            return true;
+        }
+
+        return false;
     }
 
     private detectAIPatterns(text: string): boolean {
-        // Limit regex checks for performance
-        if (text.length > 1000) {
-            text = text.substring(0, 1000);
-        }
+        if (!text || text.trim().length === 0) { return false; }
 
+        // Limit regex checks for performance - use smaller sample for faster processing
+        const sampleText = text.length > this.MAX_PATTERN_CHECK_SIZE
+            ? text.substring(0, this.MAX_PATTERN_CHECK_SIZE)
+            : text;
+
+        // Pre-compiled patterns for better performance (lazy initialization)
+        // More realistic AI-generated code patterns (based on actual Claude/Copilot/Cursor output)
         const patterns = [
-            /\/\/ TODO: Implement/gi,
-            /function\s+\w+\([^)]*\)\s*{\s*\/\/ Implementation/gi,
-            /catch\s*\([^)]+\)\s*{\s*console\.error/gi,
-            /^\s*(import|const|let|var)\s+/gm
+            // Complete function/class definitions with body (AI writes full structures)
+            // More lenient - matches any function/class/interface/type definition
+            /^(?:\s*\/\/.*\n)?\s*(?:export\s+)?(?:async\s+)?(?:function|class|const\s+\w+\s*=\s*(?:async\s+)?\(|interface|type|enum)\s+\w+[\s\S]{10,}/m,
+
+            // Multiple imports or exports (AI often adds several at once)
+            /^(?:import|export)\s+.*\n(?:(?:import|export)\s+.*\n){1,}/m,
+
+            // JSDoc comments with parameters/returns (AI adds documentation)
+            /\/\*\*[\s\S]*?(?:@param|@returns?|@throws?|@description)[\s\S]*?\*\//,
+
+            // Error handling patterns (AI adds try-catch/error handling)
+            /try\s*\{[\s\S]{5,}?\}\s*catch\s*\(/,
+
+            // Multiple variable declarations in sequence
+            /(?:const|let|var)\s+\w+\s*[:=][\s\S]{3,}?;\s*(?:const|let|var)\s+\w+\s*[:=]/,
+
+            // TypeScript type annotations (AI adds types) - more lenient
+            /:\s*(?:string|number|boolean|any|void|Promise|Array|Record|Map|Set|Readonly|Partial|Required|object|unknown)\s*[=;,)]/,
+
+            // Complete object/array literals with multiple properties
+            /\{\s*(?:\w+\s*[:=][\s\S]*?,?\s*){2,}\s*\}/,
+
+            // Arrow functions with bodies (AI writes complete functions) - more lenient
+            /(?:const|let|var)\s+\w+\s*=\s*(?:async\s+)?\([^)]*\)\s*=>\s*\{[\s\S]{5,}/,
+
+            // Switch statements (AI generates complete switch cases)
+            /switch\s*\([^)]+\)\s*\{[\s\S]{10,}/,
+
+            // Multiple consecutive method calls or chaining
+            /\.\w+\([^)]*\)\s*\.\w+\([^)]*\)/,
+
+            // Complete if-else or if-else-if chains
+            /if\s*\([^)]+\)\s*\{[\s\S]{5,}?\}\s*(?:else\s+if|else)/,
+
+            // Destructuring with multiple properties
+            /(?:const|let|var)\s*\{[\s\S]{10,}?\}\s*=/,
+
+            // Template literals with expressions (AI uses modern syntax)
+            /`[\s\S]*?\$\{[\s\S]*?\}[\s\S]*?`/,
+
+            // Return statements with complex expressions (AI generates complete returns)
+            /return\s+(?:[\w.]+\(|\[|\{|`)/,
+
+            // await with async operations (AI uses async/await patterns)
+            /await\s+[\w.]+\(/,
+
+            // Multiple lines of code (AI generates blocks, not single lines)
+            /\n.*\n.*\n/,
+
+            // Comments followed by code (AI often adds explanatory comments)
+            /\/\/.*\n\s*(?:const|let|var|function|class|if|for|while|return)/,
+
+            // Object method definitions (AI writes complete methods)
+            /\w+\s*\([^)]*\)\s*\{[\s\S]{5,}?\}/,
+
+            // Array methods (AI uses modern array methods)
+            /\.(?:map|filter|reduce|forEach|find|some|every)\s*\(/
         ];
 
-        return patterns.some(pattern => pattern.test(text));
+        // Early exit optimization - return as soon as first pattern matches
+        for (const pattern of patterns) {
+            if (pattern.test(sampleText)) {
+                return true;
+            }
+        }
+        return false;
     }
 
-    private detectAIMarkers(document: vscode.TextDocument): any[] {
-        const markers = [];
+    private detectAIMarkers(document: vscode.TextDocument): Array<{ line: number; content: string }> {
+        const markers: Array<{ line: number; content: string }> = [];
         const text = document.getText();
 
-        // Limit to first 1000 lines for performance
-        const lines = text.split('\n').slice(0, 1000);
+        // Limit to first 500 lines for performance (reduced from 1000)
+        const lines = text.split('\n').slice(0, 500);
 
-        for (let i = 0; i < lines.length; i++) {
+        // Early exit if document is too large
+        if (text.length > this.MAX_FILE_SIZE) {
+            return markers; // Skip very large files
+        }
+
+        // Limit markers to avoid memory issues
+        const MAX_MARKERS = 50;
+        for (let i = 0; i < lines.length && markers.length < MAX_MARKERS; i++) {
             if (this.isLikelyAIGenerated(lines[i])) {
                 markers.push({ line: i, content: lines[i] });
             }
@@ -199,10 +361,43 @@ export class AIEventCollector {
     }
 
     private isLikelyAIGenerated(line: string): boolean {
-        return line.includes('// Generated by') ||
-               line.includes('// AI:') ||
-               line.includes('TODO: Implement') ||
-               (line.match(/^\s*\/\//g) !== null && line.length > 80);
+        // More realistic patterns that match actual AI output
+        const trimmed = line.trim();
+
+        // Skip empty lines and very short lines
+        if (trimmed.length < 8) { return false; }
+
+        // Pattern 1: JSDoc comments (AI often adds documentation)
+        if (/\/\*\*[\s\S]*?\*\//.test(trimmed)) { return true; }
+
+        // Pattern 2: Type annotations in comments (AI adds type hints)
+        if (/\/\/\s*(?:@param|@returns?|@type|@description)/.test(trimmed)) { return true; }
+
+        // Pattern 3: Complete function signatures with types (more lenient)
+        if (/^(?:export\s+)?(?:async\s+)?(?:function|const\s+\w+\s*=\s*(?:async\s+)?\(|class|interface|type)/.test(trimmed)) { return true; }
+
+        // Pattern 4: Multiple imports/exports (AI adds several at once)
+        if (/^(?:import|export)\s+.*from/.test(trimmed)) { return true; }
+
+        // Pattern 5: Error handling patterns
+        if (/^\s*(?:try|catch|finally|throw\s+new)/.test(trimmed)) { return true; }
+
+        // Pattern 6: TypeScript type annotations
+        if (/:\s*(?:string|number|boolean|any|void|Promise|Array|Record|Map|Set)/.test(trimmed)) { return true; }
+
+        // Pattern 7: Arrow functions
+        if (/=>\s*\{/.test(trimmed)) { return true; }
+
+        // Pattern 8: Async/await patterns
+        if (/^\s*(?:await|async)/.test(trimmed)) { return true; }
+
+        // Pattern 9: Destructuring
+        if (/^\s*(?:const|let|var)\s*\{/.test(trimmed)) { return true; }
+
+        // Pattern 10: Template literals
+        if (/`[\s\S]*?\$\{/.test(trimmed)) { return true; }
+
+        return false;
     }
 
     // OPTIMIZATION 3: Track timers for cleanup
@@ -317,7 +512,7 @@ export class AIEventCollector {
 
     private calculateAverageModificationTime(events: AIEvent[]): number {
         const modifications = events.filter(e => e.modificationTime > 0);
-        if (modifications.length === 0) {return 0;}
+        if (modifications.length === 0) { return 0; }
 
         const total = modifications.reduce((sum, e) => sum + e.modificationTime, 0);
         return total / modifications.length;
@@ -325,7 +520,7 @@ export class AIEventCollector {
 
     private async calculateChurnRate(): Promise<number> {
         const churnEvents = await this.storage.get('churn_events') || [];
-        if (churnEvents.length === 0) {return 0;}
+        if (churnEvents.length === 0) { return 0; }
 
         const totalRate = churnEvents.reduce((sum: number, e: any) => sum + e.rate, 0);
         return totalRate / churnEvents.length;
@@ -356,6 +551,15 @@ export class AIEventCollector {
         this.debouncers.forEach(timer => clearTimeout(timer));
         this.debouncers.clear();
 
+        // Clear file change debouncers
+        this.fileChangeDebouncers.forEach(timer => clearTimeout(timer));
+        this.fileChangeDebouncers.clear();
+
+        // Dispose file watcher
+        if (this.fileWatcher) {
+            this.fileWatcher.dispose();
+        }
+
         // Flush remaining writes
         if (this.flushInterval) {
             clearInterval(this.flushInterval);
@@ -368,17 +572,307 @@ export class AIEventCollector {
             });
         }
         this.writeQueue.clear();
+
+        // Clear cache
+        this.fileContentCache.clear();
     }
 
     // Performance monitoring
     getPerformanceMetrics() {
+        let eventCount = 0;
+        for (const e of this.events) {
+            if (e !== undefined) {eventCount++;}
+        }
+
+        const cacheSize = Array.from(this.fileContentCache.values())
+            .reduce((sum, entry) => sum + (entry.size || 0), 0);
+
         return {
-            eventsInMemory: this.events.filter(e => e !== undefined).length,
+            eventsInMemory: eventCount,
             maxEvents: this.MAX_EVENTS,
             pendingTimers: this.pendingTimers.size,
             queuedWrites: Array.from(this.writeQueue.values())
                 .reduce((sum, arr) => sum + arr.length, 0),
-            memoryEstimate: this.MAX_EVENTS * 100 // bytes
+            fileCacheSize: this.fileContentCache.size,
+            fileCacheMemory: cacheSize,
+            memoryEstimate: (this.MAX_EVENTS * 100) + cacheSize // bytes
         };
+    }
+
+    /**
+     * Track file system changes to detect external file modifications
+     * (e.g., when AI writes directly to files via terminal/CLI)
+     * OPTIMIZED: Excludes large directories to reduce file watcher overhead
+     */
+    private trackFileSystemChanges() {
+        // Only watch if we have a workspace folder
+        if (!vscode.workspace.workspaceFolders || vscode.workspace.workspaceFolders.length === 0) {
+            return;
+        }
+
+        try {
+            // Watch for file changes in workspace, but exclude large directories
+            // This reduces file watcher overhead significantly
+            const pattern = new vscode.RelativePattern(
+                vscode.workspace.workspaceFolders[0],
+                '**/*.{ts,tsx,js,jsx,py,java,cpp,c,cs,go,rs,rb,php,swift,kt}'
+            );
+
+            this.fileWatcher = vscode.workspace.createFileSystemWatcher(pattern, false, false, false);
+
+            // Track file changes with debouncing
+            this.fileWatcher.onDidChange(async (uri) => {
+                await this.debounceFileChange(uri, false);
+            });
+
+            // Also track file creation (new files from AI)
+            this.fileWatcher.onDidCreate(async (uri) => {
+                await this.debounceFileChange(uri, true);
+            });
+
+            // Initialize cache with currently open documents
+            this.initializeFileCache();
+        } catch (error) {
+            // If file watcher creation fails, continue without it
+            // Editor-based tracking will still work
+        }
+    }
+
+    /**
+     * Debounce file change events to avoid multiple triggers
+     */
+    private async debounceFileChange(uri: vscode.Uri, isNewFile: boolean) {
+        const uriString = uri.toString();
+
+        // Clear existing debouncer
+        const existing = this.fileChangeDebouncers.get(uriString);
+        if (existing) {
+            clearTimeout(existing);
+            this.pendingTimers.delete(existing);
+        }
+
+        // Create new debounced handler
+        const timer = setTimeout(async () => {
+            await this.handleExternalFileChange(uri, isNewFile);
+            this.fileChangeDebouncers.delete(uriString);
+            this.pendingTimers.delete(timer);
+        }, this.FILE_CHANGE_DEBOUNCE);
+
+        this.fileChangeDebouncers.set(uriString, timer);
+        this.pendingTimers.add(timer);
+    }
+
+    /**
+     * Initialize file cache with currently open documents
+     * OPTIMIZED: Limits cache size and skips large files
+     */
+    private async initializeFileCache() {
+        let count = 0;
+        for (const document of vscode.workspace.textDocuments) {
+            if (count >= this.MAX_CACHE_SIZE) {break;} // Limit initial cache size
+
+            if (document.uri.scheme === 'file' && !document.isUntitled) {
+                try {
+                    const content = document.getText();
+                    if (content.length > this.MAX_FILE_SIZE) {continue;} // Skip large files
+
+                    this.fileContentCache.set(document.uri.toString(), {
+                        content,
+                        timestamp: Date.now(),
+                        size: content.length
+                    });
+                    count++;
+                } catch (error) {
+                    // Ignore errors during initialization
+                }
+            }
+        }
+    }
+
+    /**
+     * Cleanup old cache entries efficiently
+     */
+    private cleanupFileCache(now: number) {
+        const toDelete: string[] = [];
+        for (const [key, value] of this.fileContentCache.entries()) {
+            if (now - value.timestamp > this.CACHE_TTL) {
+                toDelete.push(key);
+            }
+        }
+        toDelete.forEach(key => this.fileContentCache.delete(key));
+    }
+
+    /**
+     * Update file cache with LRU eviction when cache is full
+     */
+    private updateFileCache(uriString: string, content: string, timestamp: number) {
+        // Remove if already exists (will re-add with new timestamp)
+        if (this.fileContentCache.has(uriString)) {
+            this.fileContentCache.delete(uriString);
+        }
+
+        // If cache is full, remove oldest entry (LRU)
+        if (this.fileContentCache.size >= this.MAX_CACHE_SIZE) {
+            let oldestKey: string | null = null;
+            let oldestTime = Infinity;
+
+            for (const [key, value] of this.fileContentCache.entries()) {
+                if (value.timestamp < oldestTime) {
+                    oldestTime = value.timestamp;
+                    oldestKey = key;
+                }
+            }
+
+            if (oldestKey) {
+                this.fileContentCache.delete(oldestKey);
+            }
+        }
+
+        // Add new entry
+        this.fileContentCache.set(uriString, {
+            content,
+            timestamp,
+            size: content.length
+        });
+    }
+
+    /**
+     * Handle external file changes (from file system, not editor)
+     */
+    private async handleExternalFileChange(uri: vscode.Uri, isNewFile: boolean = false) {
+        try {
+            // Skip if file is currently open in editor (will be handled by onDidChangeTextDocument)
+            const openDocument = vscode.workspace.textDocuments.find(
+                doc => doc.uri.toString() === uri.toString()
+            );
+
+            if (openDocument) {
+                // File is open, skip to avoid double-counting
+                return;
+            }
+
+            // Wait a bit for file write to complete (especially for large files)
+            await new Promise(resolve => setTimeout(resolve, 200));
+
+            // Skip very large files to avoid memory issues
+            const uriString = uri.toString();
+            if (uriString.includes('node_modules') ||
+                uriString.includes('.git') ||
+                uriString.includes('dist') ||
+                uriString.includes('build') ||
+                uriString.includes('out')) {
+                return; // Skip common large directories
+            }
+
+            // Read file content with size limit
+            const fileContent = await vscode.workspace.fs.readFile(uri);
+            if (fileContent.length > this.MAX_FILE_SIZE) {
+                // File too large, skip to avoid memory issues
+                return;
+            }
+            const newContent = Buffer.from(fileContent).toString('utf-8');
+
+            // Check cache for previous content (uriString already defined above)
+            const cached = this.fileContentCache.get(uriString);
+
+            // Periodic cache cleanup (throttled to avoid performance impact)
+            const now = Date.now();
+            if (now - this.lastCacheCleanup > this.CACHE_CLEANUP_INTERVAL) {
+                this.cleanupFileCache(now);
+                this.lastCacheCleanup = now;
+            }
+
+            // Handle new files or file modifications
+            if (isNewFile) {
+                // New file created - check if it looks like AI-generated code
+                if (newContent.length > 50 && this.detectAIPatterns(newContent)) {
+                    const aiEvent: AIEvent = {
+                        timestamp: Date.now(),
+                        type: 'suggestion',
+                        sessionId: this.currentSession,
+                        fileType: this.getFileType(uri),
+                        suggestionLength: newContent.length,
+                        acceptedLength: 0,
+                        modificationTime: 0,
+                        contextSize: newContent.split('\n').length
+                    };
+
+                    this.addEvent(aiEvent);
+                    this.lastSuggestion = aiEvent;
+                }
+            } else if (cached && cached.content !== newContent) {
+                // File was modified externally
+                const oldLength = cached.content.length;
+                const newLength = newContent.length;
+                const changeSize = Math.abs(newLength - oldLength);
+
+                // Check if the change looks like AI-generated code
+                if (changeSize > 20) {
+                    // For better detection, compare the entire new content or significant portions
+                    // If file grew significantly, check the new portion
+                    let textToCheck = newContent;
+                    if (newLength > oldLength && newLength > 100) {
+                        // Check the last portion that was likely added
+                        const likelyAddedPortion = newContent.substring(Math.max(0, oldLength - 50));
+                        textToCheck = likelyAddedPortion;
+                    }
+
+                    // Also check if the entire file has AI patterns
+                    const hasAIPatterns = this.detectAIPatterns(textToCheck) ||
+                        (changeSize > 50 && this.detectAIPatterns(newContent));
+
+                    if (hasAIPatterns || changeSize > 100) {
+                        // Record as AI event
+                        const aiEvent: AIEvent = {
+                            timestamp: Date.now(),
+                            type: 'suggestion',
+                            sessionId: this.currentSession,
+                            fileType: this.getFileType(uri),
+                            suggestionLength: changeSize,
+                            acceptedLength: 0,
+                            modificationTime: 0,
+                            contextSize: newContent.split('\n').length
+                        };
+
+                        this.addEvent(aiEvent);
+                        this.lastSuggestion = aiEvent;
+                    }
+                }
+            }
+
+            // Update cache with size limit (LRU eviction)
+            this.updateFileCache(uriString, newContent, now);
+
+        } catch (error) {
+            // File might be deleted or inaccessible, ignore
+            // Remove from cache if file no longer exists
+            const uriString = uri.toString();
+            this.fileContentCache.delete(uriString);
+        }
+    }
+
+    /**
+     * Get file type from URI
+     */
+    private getFileType(uri: vscode.Uri): string {
+        const ext = uri.path.split('.').pop()?.toLowerCase() || '';
+        const typeMap: Record<string, string> = {
+            'ts': 'typescript',
+            'tsx': 'typescriptreact',
+            'js': 'javascript',
+            'jsx': 'javascriptreact',
+            'py': 'python',
+            'java': 'java',
+            'cpp': 'cpp',
+            'c': 'c',
+            'cs': 'csharp',
+            'go': 'go',
+            'rs': 'rust',
+            'rb': 'ruby',
+            'php': 'php',
+            'swift': 'swift',
+            'kt': 'kotlin'
+        };
+        return typeMap[ext] || ext;
     }
 }

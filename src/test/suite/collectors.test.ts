@@ -73,6 +73,68 @@ suite('AIEventCollector Test Suite', () => {
         assert.strictEqual(typeof metrics.averageModificationTime, 'number');
         assert.ok(metrics.averageModificationTime >= 0);
     });
+
+    test('should get performance metrics', () => {
+        const perfMetrics = collector.getPerformanceMetrics();
+
+        assert.ok(perfMetrics);
+        assert.strictEqual(typeof perfMetrics.eventsInMemory, 'number');
+        assert.strictEqual(typeof perfMetrics.maxEvents, 'number');
+        assert.strictEqual(typeof perfMetrics.pendingTimers, 'number');
+        assert.strictEqual(typeof perfMetrics.queuedWrites, 'number');
+        assert.strictEqual(typeof perfMetrics.fileCacheSize, 'number');
+        assert.strictEqual(typeof perfMetrics.fileCacheMemory, 'number');
+        assert.strictEqual(typeof perfMetrics.memoryEstimate, 'number');
+
+        // Verify memory is bounded
+        assert.ok(perfMetrics.memoryEstimate >= 0);
+        assert.ok(perfMetrics.fileCacheSize >= 0);
+    });
+
+    test('should handle dispose without errors', () => {
+        collector.startTracking();
+        collector.dispose();
+        // Should not throw
+        assert.ok(true);
+    });
+
+    test('should track events in circular buffer', () => {
+        const initialPerf = collector.getPerformanceMetrics();
+        
+        // After dispose and recreate, should still work
+        collector.dispose();
+        const newCollector = new AIEventCollector(storage);
+        const newPerf = newCollector.getPerformanceMetrics();
+        
+        assert.ok(newPerf.eventsInMemory >= 0);
+        assert.strictEqual(newPerf.maxEvents, 1000);
+        newCollector.dispose();
+    });
+
+    test('should limit memory usage', () => {
+        const perfMetrics = collector.getPerformanceMetrics();
+
+        // Memory estimate should be reasonable
+        // MAX_EVENTS * 100 bytes + file cache
+        const maxExpectedMemory = (1000 * 100) + (50 * 500000); // Max cache size
+        assert.ok(perfMetrics.memoryEstimate <= maxExpectedMemory);
+    });
+
+    test('should handle startTracking without errors', () => {
+        collector.startTracking();
+        // Should not throw
+        assert.ok(true);
+    });
+
+    test('should return valid quick stats after tracking', () => {
+        collector.startTracking();
+        const stats = collector.getQuickStats();
+
+        assert.ok(stats);
+        assert.ok(stats.activeSession);
+        assert.strictEqual(typeof stats.recentSuggestions, 'number');
+        assert.strictEqual(typeof stats.recentAcceptance, 'number');
+    });
 });
 
 suite('CodeChangeCollector Test Suite', () => {
