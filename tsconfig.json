@@ -14,8 +14,6 @@
   },
   "exclude": [
     "node_modules",
-    ".vscode-test",
-    "**/*.optimized.ts",
-    "**/extension.industry-best-practices.ts"
+    ".vscode-test"
   ]
 }
