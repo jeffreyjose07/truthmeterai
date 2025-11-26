@@ -6,6 +6,7 @@ export class TimeTracker implements vscode.Disposable {
     private flowTime: number = 0; // Time spent in "flow" state (current session)
     private currentStreak: number = 0; // Continuous active time
     private isFlowing: boolean = false; // Are we currently in flow?
+    private contextSwitches: number = 0; // Track file switching
     private lastActivity: number = Date.now();
     private isActive: boolean = false;
     private intervalId: NodeJS.Timeout | null = null;
@@ -17,6 +18,7 @@ export class TimeTracker implements vscode.Disposable {
         // Track when user is actively coding
         this.disposables.push(
             vscode.window.onDidChangeActiveTextEditor(() => {
+                this.contextSwitches++;
                 this.recordActivity();
             }),
             vscode.workspace.onDidChangeTextDocument(() => {
@@ -47,12 +49,14 @@ export class TimeTracker implements vscode.Disposable {
                 start: this.lastActivity,
                 end: now,
                 duration: this.activeTime,
-                flowDuration: this.flowTime
+                flowDuration: this.flowTime,
+                contextSwitches: this.contextSwitches
             });
             this.activeTime = 0;
             this.flowTime = 0;
             this.currentStreak = 0;
             this.isFlowing = false;
+            this.contextSwitches = 0;
         }
 
         this.isActive = true;
@@ -99,15 +103,18 @@ export class TimeTracker implements vscode.Disposable {
 
         const totalTime = sessions.reduce((sum: number, s: any) => sum + (s.duration || 0), 0);
         const totalFlow = sessions.reduce((sum: number, s: any) => sum + (s.flowDuration || 0), 0);
+        const totalSwitches = sessions.reduce((sum: number, s: any) => sum + (s.contextSwitches || 0), 0);
         const totalSessions = sessions.length;
 
         const currentTotalTime = totalTime + this.activeTime;
         const currentTotalFlow = totalFlow + this.flowTime;
+        const currentTotalSwitches = totalSwitches + this.contextSwitches;
 
         return {
             totalActiveTime: currentTotalTime / 1000 / 60, // minutes
             flowTime: currentTotalFlow / 1000 / 60, // minutes
             flowEfficiency: currentTotalTime > 0 ? currentTotalFlow / currentTotalTime : 0,
+            contextSwitches: currentTotalSwitches,
             currentSessionTime: this.activeTime / 1000 / 60, // minutes
             totalSessions: totalSessions,
             averageSessionLength: totalSessions > 0 ? (totalTime / totalSessions) / 1000 / 60 : 0

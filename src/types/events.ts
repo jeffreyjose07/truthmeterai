@@ -7,6 +7,7 @@ export interface AIEvent {
     acceptedLength: number;
     modificationTime: number;
     contextSize: number;
+    uri?: string;
 }
 
 export interface ChurnEvent {

@@ -33,7 +33,7 @@ export class ProductivityAnalyzer {
 
             flowEfficiency: {
                 focusTime: (timeMetrics?.flowTime || 0) / 60, // Flow time in hours
-                contextSwitches: Math.floor(activeTimeHours * (1 - flowEfficiency) * 10), // Proxy: interruptions per hour
+                contextSwitches: timeMetrics?.contextSwitches || 0,
                 waitTime: 0
             },
 

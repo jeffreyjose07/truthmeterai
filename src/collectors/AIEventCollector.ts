@@ -152,7 +152,8 @@ export class AIEventCollector {
                 suggestionLength: this.calculateChangeSize(event),
                 acceptedLength: 0,
                 modificationTime: 0,
-                contextSize: event.document.lineCount
+                contextSize: event.document.lineCount,
+                uri: uri
             };
 
             this.addEvent(aiEvent);  // Use circular buffer
@@ -880,7 +881,8 @@ export class AIEventCollector {
                         suggestionLength: newContent.length,
                         acceptedLength: 0,
                         modificationTime: 0,
-                        contextSize: newContent.split('\n').length
+                        contextSize: newContent.split('\n').length,
+                        uri: uriString
                     };
 
                     this.addEvent(aiEvent);
@@ -917,7 +919,8 @@ export class AIEventCollector {
                             suggestionLength: changeSize,
                             acceptedLength: 0,
                             modificationTime: 0,
-                            contextSize: newContent.split('\n').length
+                            contextSize: newContent.split('\n').length,
+                            uri: uriString
                         };
 
                         this.addEvent(aiEvent);
