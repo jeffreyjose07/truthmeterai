@@ -4,14 +4,14 @@ import { CodeQualityMetrics } from '../types/metrics';
 export class CodeQualityAnalyzer {
     private previousAnalysis: Map<string, any> = new Map();
 
-    async analyze(): Promise<CodeQualityMetrics> {
+    async analyze(gitMetrics?: any): Promise<CodeQualityMetrics> {
         const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
         if (!workspaceFolder) {
             return this.getDefaultMetrics();
         }
 
         const analysis: CodeQualityMetrics = {
-            codeChurn: await this.analyzeCodeChurn(),
+            codeChurn: await this.analyzeCodeChurn(gitMetrics),
             duplication: await this.analyzeDuplication(),
             complexity: await this.analyzeComplexity(),
             refactoring: await this.analyzeRefactoring(),
@@ -23,7 +23,18 @@ export class CodeQualityAnalyzer {
         return analysis;
     }
 
-    private async analyzeCodeChurn(): Promise<any> {
+    private async analyzeCodeChurn(gitMetrics?: any): Promise<any> {
+        // Use Git metrics if available (more accurate)
+        if (gitMetrics && typeof gitMetrics.churnRate === 'number') {
+            const rate = gitMetrics.churnRate;
+            return {
+                rate,
+                trend: this.calculateTrend('churn', rate),
+                aiVsHuman: await this.compareAIvsHumanChurn()
+            };
+        }
+
+        // Fallback to file-system heuristic
         const recentFiles = await this.getRecentlyModifiedFiles();
         let totalChurn = 0;
         let fileCount = 0;

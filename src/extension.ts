@@ -373,7 +373,7 @@ async function collectAllMetrics(
     }
 
     // Heavy analysis (allow cancellation between steps)
-    const quality = await analyzers.qualityAnalyzer!.analyze();
+    const quality = await analyzers.qualityAnalyzer!.analyze(git);
     await yieldToEventLoop();
 
     if (token.isCancellationRequested) {

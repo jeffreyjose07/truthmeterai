@@ -38,11 +38,54 @@ export class GitAnalyzer {
                 uncommittedChanges: status.files.length,
                 currentBranch: status.current,
                 commitFrequency: this.calculateCommitFrequency(Array.from(log.all)),
-                averageCommitSize: await this.calculateAverageCommitSize(Array.from(log.all))
+                averageCommitSize: await this.calculateAverageCommitSize(Array.from(log.all)),
+                churnRate: await this.calculateChurnRate()
             };
         } catch (error) {
             console.error('Error analyzing git:', error);
             return null;
+        }
+    }
+
+    private async calculateChurnRate(): Promise<number> {
+        if (!this.git) { return 0; }
+
+        try {
+            // Get numstat for last 14 days to detect "Code Churn" (rework)
+            const twoWeeksAgo = new Date();
+            twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
+
+            // git log --numstat --since="2023-..."
+            const log = await this.git.raw([
+                'log',
+                '--numstat',
+                `--since=${twoWeeksAgo.toISOString()}`,
+                '--format=' // Suppress commit info, just show stats
+            ]);
+
+            let totalAdded = 0;
+            let totalDeleted = 0;
+
+            const lines = log.split('\n');
+            for (const line of lines) {
+                const parts = line.split('\t');
+                if (parts.length >= 2) {
+                    const added = parseInt(parts[0], 10);
+                    const deleted = parseInt(parts[1], 10);
+
+                    if (!isNaN(added)) { totalAdded += added; }
+                    if (!isNaN(deleted)) { totalDeleted += deleted; }
+                }
+            }
+
+            // Churn Rate = Ratio of code deleted to total code changes
+            // High deletion rate often implies rework/churn
+            const totalChanges = totalAdded + totalDeleted;
+            return totalChanges > 0 ? totalDeleted / totalChanges : 0;
+
+        } catch (error) {
+            console.error('Error calculating churn rate:', error);
+            return 0;
         }
     }
 
