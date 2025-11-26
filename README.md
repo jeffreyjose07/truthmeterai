@@ -2,11 +2,16 @@
 
 **Built with Science, Not Hype**
 
-[![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://github.com/jeffreyjose07/truthmeterai)
+[![Version](https://img.shields.io/badge/version-1.0.4-blue.svg)](https://github.com/jeffreyjose07/truthmeterai)
 [![License](https://img.shields.io/badge/license-AGPL--3.0-green.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-104%20passing-brightgreen.svg)](#testing-and-quality-assurance)
+[![Tests](https://img.shields.io/badge/tests-140%20passing-brightgreen.svg)](#testing-and-quality-assurance)
 
 Measure the **ACTUAL** impact of AI coding assistants on developer productivity based on peer-reviewed research, not vanity metrics.
+
+> **New in v1.0.4:** 
+> - **Refined UI:** Updated dashboard with "neutral start" state (shows 0% ROI instead of -100% for new users).
+> - **New Icon:** Modern, solid-background design for better visibility in the marketplace.
+> - **Performance:** Optimized memory management for long coding sessions.
 
 ---
 

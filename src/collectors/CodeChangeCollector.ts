@@ -2,21 +2,32 @@ import * as vscode from 'vscode';
 import { LocalStorage } from '../storage/LocalStorage';
 
 export class CodeChangeCollector {
-    private changes: any[] = [];
+    private disposables: vscode.Disposable[] = [];
+    private changeBuffer: any[] = [];
+    private saveBuffer: any[] = [];
+    private flushTimer: NodeJS.Timeout | undefined;
+    private readonly FLUSH_INTERVAL = 30000; // 30 seconds
+    private readonly MAX_BUFFER_SIZE = 100;
 
     constructor(private storage: LocalStorage) {}
 
     startTracking() {
-        vscode.workspace.onDidChangeTextDocument((event) => {
-            this.recordChange(event);
-        });
-
-        vscode.workspace.onDidSaveTextDocument((document) => {
-            this.recordSave(document);
-        });
+        this.disposables.push(
+            vscode.workspace.onDidChangeTextDocument((event) => {
+                this.recordChange(event);
+            }),
+            vscode.workspace.onDidSaveTextDocument((document) => {
+                this.recordSave(document);
+            })
+        );
     }
 
     private recordChange(event: vscode.TextDocumentChangeEvent) {
+        // Ignore changes to output window or logs
+        if (event.document.uri.scheme === 'output' || event.document.uri.scheme === 'log') {
+            return;
+        }
+
         const change = {
             timestamp: Date.now(),
             uri: event.document.uri.toString(),
@@ -25,8 +36,8 @@ export class CodeChangeCollector {
             totalChars: event.contentChanges.reduce((sum, c) => sum + c.text.length, 0)
         };
 
-        this.changes.push(change);
-        this.storage.store('code_changes', change);
+        this.changeBuffer.push(change);
+        this.checkFlush();
     }
 
     private recordSave(document: vscode.TextDocument) {
@@ -37,12 +48,42 @@ export class CodeChangeCollector {
             lineCount: document.lineCount
         };
 
-        this.storage.store('code_saves', save);
+        this.saveBuffer.push(save);
+        this.checkFlush();
+    }
+
+    private checkFlush() {
+        if (this.changeBuffer.length >= this.MAX_BUFFER_SIZE || this.saveBuffer.length >= this.MAX_BUFFER_SIZE) {
+            this.flush();
+        } else if (!this.flushTimer) {
+            this.flushTimer = setTimeout(() => this.flush(), this.FLUSH_INTERVAL);
+        }
+    }
+
+    private async flush() {
+        if (this.flushTimer) {
+            clearTimeout(this.flushTimer);
+            this.flushTimer = undefined;
+        }
+
+        if (this.changeBuffer.length > 0) {
+            const changes = [...this.changeBuffer];
+            this.changeBuffer = [];
+            // Store efficiently - maybe aggregated or just batched
+            await Promise.all(changes.map(c => this.storage.store('code_changes', c)));
+        }
+
+        if (this.saveBuffer.length > 0) {
+            const saves = [...this.saveBuffer];
+            this.saveBuffer = [];
+            await Promise.all(saves.map(s => this.storage.store('code_saves', s)));
+        }
     }
 
     async getMetrics() {
-        const changes = await this.storage.get('code_changes') || [];
-        const saves = await this.storage.get('code_saves') || [];
+        // Combine stored data with unsaved buffer data for real-time accuracy
+        const changes = (await this.storage.get('code_changes') || []).concat(this.changeBuffer);
+        const saves = (await this.storage.get('code_saves') || []).concat(this.saveBuffer);
 
         return {
             totalChanges: changes.length,
@@ -55,7 +96,10 @@ export class CodeChangeCollector {
     private getMostEditedLanguage(changes: any[]): string {
         const languageCounts = new Map<string, number>();
 
-        for (const change of changes) {
+        // Optimize: Sample last 1000 changes if array is huge
+        const sample = changes.length > 1000 ? changes.slice(-1000) : changes;
+
+        for (const change of sample) {
             const count = languageCounts.get(change.languageId) || 0;
             languageCounts.set(change.languageId, count + 1);
         }
@@ -71,5 +115,14 @@ export class CodeChangeCollector {
         }
 
         return maxLanguage;
+    }
+
+    dispose() {
+        this.flush(); // Flush remaining data
+        this.disposables.forEach(d => d.dispose());
+        this.disposables = [];
+        if (this.flushTimer) {
+            clearTimeout(this.flushTimer);
+        }
     }
 }

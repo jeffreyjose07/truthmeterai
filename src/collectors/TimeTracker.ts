@@ -1,31 +1,32 @@
 import * as vscode from 'vscode';
 import { LocalStorage } from '../storage/LocalStorage';
 
-export class TimeTracker {
+export class TimeTracker implements vscode.Disposable {
     private activeTime: number = 0;
     private lastActivity: number = Date.now();
     private isActive: boolean = false;
     private intervalId: NodeJS.Timeout | null = null;
+    private disposables: vscode.Disposable[] = [];
 
     constructor(private storage: LocalStorage) {}
 
     startTracking() {
         // Track when user is actively coding
-        vscode.window.onDidChangeActiveTextEditor(() => {
-            this.recordActivity();
-        });
-
-        vscode.workspace.onDidChangeTextDocument(() => {
-            this.recordActivity();
-        });
-
-        vscode.window.onDidChangeWindowState((state) => {
-            if (state.focused) {
+        this.disposables.push(
+            vscode.window.onDidChangeActiveTextEditor(() => {
                 this.recordActivity();
-            } else {
-                this.recordInactivity();
-            }
-        });
+            }),
+            vscode.workspace.onDidChangeTextDocument(() => {
+                this.recordActivity();
+            }),
+            vscode.window.onDidChangeWindowState((state) => {
+                if (state.focused) {
+                    this.recordActivity();
+                } else {
+                    this.recordInactivity();
+                }
+            })
+        );
 
         // Update active time every second
         this.intervalId = setInterval(() => {
@@ -86,6 +87,9 @@ export class TimeTracker {
     dispose() {
         if (this.intervalId) {
             clearInterval(this.intervalId);
+            this.intervalId = null;
         }
+        this.disposables.forEach(d => d.dispose());
+        this.disposables = [];
     }
 }
