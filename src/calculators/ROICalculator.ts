@@ -21,7 +21,16 @@ export class ROICalculator {
         const monthlyValue = dollarValue * 4; 
         
         // Avoid division by zero
-        const roi = monthlyCost > 0 ? (monthlyValue - monthlyCost) / monthlyCost : 0;
+        let roi = 0;
+        if (monthlyCost > 0) {
+            // If we have no saved time, don't show -100% ROI (which implies loss),
+            // instead show 0% (neutral/pending) until we have data.
+            if (monthlyValue === 0) {
+                roi = 0;
+            } else {
+                roi = (monthlyValue - monthlyCost) / monthlyCost;
+            }
+        }
 
         const hiddenCosts = await this.calculateHiddenCosts();
         const teamImpact = await this.calculateTeamImpact();
