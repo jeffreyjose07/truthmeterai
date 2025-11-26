@@ -3,6 +3,9 @@ import { LocalStorage } from '../storage/LocalStorage';
 
 export class TimeTracker implements vscode.Disposable {
     private activeTime: number = 0;
+    private flowTime: number = 0; // Time spent in "flow" state (current session)
+    private currentStreak: number = 0; // Continuous active time
+    private isFlowing: boolean = false; // Are we currently in flow?
     private lastActivity: number = Date.now();
     private isActive: boolean = false;
     private intervalId: NodeJS.Timeout | null = null;
@@ -43,9 +46,13 @@ export class TimeTracker implements vscode.Disposable {
             this.storage.store('time_sessions', {
                 start: this.lastActivity,
                 end: now,
-                duration: this.activeTime
+                duration: this.activeTime,
+                flowDuration: this.flowTime
             });
             this.activeTime = 0;
+            this.flowTime = 0;
+            this.currentStreak = 0;
+            this.isFlowing = false;
         }
 
         this.isActive = true;
@@ -54,6 +61,7 @@ export class TimeTracker implements vscode.Disposable {
 
     private recordInactivity() {
         this.isActive = false;
+        // Don't break flow immediately on window blur, but `updateActiveTime` will handle it
     }
 
     private updateActiveTime() {
@@ -64,20 +72,42 @@ export class TimeTracker implements vscode.Disposable {
             // Only count as active if activity within last 60 seconds
             if (timeSinceLastActivity < 60000) {
                 this.activeTime += 1000;
+                this.currentStreak += 1000;
+
+                // Flow state detection: > 15 minutes of continuous activity
+                // (SPACE Framework - Efficiency)
+                if (!this.isFlowing && this.currentStreak >= 900000) {
+                    this.isFlowing = true;
+                    this.flowTime += this.currentStreak; // Add the buildup time
+                } else if (this.isFlowing) {
+                    this.flowTime += 1000;
+                }
+
             } else {
                 this.isActive = false;
+                this.currentStreak = 0;
+                this.isFlowing = false;
             }
+        } else {
+            this.currentStreak = 0;
+            this.isFlowing = false;
         }
     }
 
     async getMetrics() {
         const sessions = await this.storage.get('time_sessions') || [];
 
-        const totalTime = sessions.reduce((sum: number, s: any) => sum + s.duration, 0);
+        const totalTime = sessions.reduce((sum: number, s: any) => sum + (s.duration || 0), 0);
+        const totalFlow = sessions.reduce((sum: number, s: any) => sum + (s.flowDuration || 0), 0);
         const totalSessions = sessions.length;
 
+        const currentTotalTime = totalTime + this.activeTime;
+        const currentTotalFlow = totalFlow + this.flowTime;
+
         return {
-            totalActiveTime: totalTime / 1000 / 60, // minutes
+            totalActiveTime: currentTotalTime / 1000 / 60, // minutes
+            flowTime: currentTotalFlow / 1000 / 60, // minutes
+            flowEfficiency: currentTotalTime > 0 ? currentTotalFlow / currentTotalTime : 0,
             currentSessionTime: this.activeTime / 1000 / 60, // minutes
             totalSessions: totalSessions,
             averageSessionLength: totalSessions > 0 ? (totalTime / totalSessions) / 1000 / 60 : 0

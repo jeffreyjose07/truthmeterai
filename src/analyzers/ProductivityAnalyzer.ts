@@ -6,6 +6,7 @@ export class ProductivityAnalyzer {
         const acceptanceRate = aiMetrics?.acceptanceRate || 0;
         const totalSuggestions = aiMetrics?.totalSuggestions || 0;
         const activeTimeHours = (timeMetrics?.totalActiveTime || 0) / 60;
+        const flowEfficiency = timeMetrics?.flowEfficiency || 0;
         
         // Calculate velocity change based on AI acceptance rate
         // Research suggests 0-26% actual gain, highly correlated with acceptance
@@ -31,8 +32,8 @@ export class ProductivityAnalyzer {
             },
 
             flowEfficiency: {
-                focusTime: activeTimeHours,
-                contextSwitches: 0, // TODO: Add window focus tracking
+                focusTime: (timeMetrics?.flowTime || 0) / 60, // Flow time in hours
+                contextSwitches: Math.floor(activeTimeHours * (1 - flowEfficiency) * 10), // Proxy: interruptions per hour
                 waitTime: 0
             },
 
