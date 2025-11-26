@@ -1,11 +1,9 @@
-#!/usr/bin/env sh
-. "$(dirname -- "$0")/_/husky.sh"
 
 # Run linter on staged files
 npx lint-staged
 
-# Run tests to ensure everything passes
-npm test
+# Run unit tests (fast and headless)
+npm run test:unit
 
 # If we get here, all checks passed
 echo "✅ All pre-commit checks passed!"

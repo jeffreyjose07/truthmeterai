@@ -136,6 +136,37 @@ export class MockWebview {
     }
 }
 
+export class MockWorkspaceConfiguration {
+    private config: Map<string, any>;
+
+    constructor(section: string) {
+        this.config = new Map();
+        // Default values based on package.json
+        if (section === 'aiMetrics.performance') {
+            this.config.set('maxEvents', 1000);
+            this.config.set('debounceDelay', 300);
+            this.config.set('analysisInterval', 600000);
+        }
+    }
+
+    get<T>(key: string, defaultValue?: T): T {
+        return this.config.has(key) ? this.config.get(key) : defaultValue;
+    }
+
+    has(key: string): boolean {
+        return this.config.has(key);
+    }
+
+    inspect(key: string): any {
+        return undefined;
+    }
+
+    update(key: string, value: any): Thenable<void> {
+        this.config.set(key, value);
+        return Promise.resolve();
+    }
+}
+
 export const mockVscode = {
     window: {
         createOutputChannel: (name: string) => new MockOutputChannel(),
@@ -161,7 +192,8 @@ export const mockVscode = {
                 mtime: Date.now() - 3600000,
                 size: 1000
             })
-        }
+        },
+        getConfiguration: (section: string) => new MockWorkspaceConfiguration(section)
     },
     commands: {
         registerCommand: () => ({ dispose: () => {} }),

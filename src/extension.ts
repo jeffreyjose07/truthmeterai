@@ -300,83 +300,40 @@ async function calculateAndStoreMetrics(context: vscode.ExtensionContext): Promi
     try {
         const stor = await getStorage(context);
         const collectors = await getCollectors(context);
+        const analyzers = await getAnalyzers();
 
-        // Get quick metrics from collectors (will return zeros if no activity yet)
-        const aiMetrics = await collectors.aiCollector!.getMetrics();
+        // 1. Collect raw data from collectors
+        const [aiMetrics, codeMetrics, timeMetrics] = await Promise.all([
+            collectors.aiCollector!.getMetrics(),
+            collectors.codeCollector!.getMetrics(),
+            collectors.timeTracker!.getMetrics()
+        ]);
+
+        logger.info(`Raw metrics collected: Suggestions=${aiMetrics.totalSuggestions}, ActiveTime=${timeMetrics.totalActiveTime}`);
+
+        // 2. Run analysis using the raw data
+        // Note: Git analysis is skipped here for speed as it can be slow
         
-        logger.info(`Calculating metrics: ${aiMetrics.totalSuggestions} suggestions, ${aiMetrics.acceptanceRate} acceptance rate`);
+        const qualityMetrics = await analyzers.qualityAnalyzer!.analyze();
+        const productivityMetrics = await analyzers.productivityAnalyzer!.analyze(aiMetrics, codeMetrics, timeMetrics);
+        
+        // Pass productivity metrics to ROI calculator
+        const roiMetrics = await analyzers.roiCalculator!.calculate(productivityMetrics); 
 
-        // Build AllMetrics object with available data
+        // 3. Construct the full metrics object
         const metrics: AllMetrics = {
-            quality: {
-                codeChurn: {
-                    rate: aiMetrics.churnRate || 0,
-                    trend: 'stable' as const,
-                    aiVsHuman: 1
-                },
-                duplication: {
-                    cloneRate: 0,
-                    copyPasteRatio: 0,
-                    beforeAI: 0,
-                    afterAI: 0
-                },
-                complexity: {
-                    cyclomaticComplexity: 0,
-                    cognitiveLoad: 0,
-                    nestingDepth: 0,
-                    aiGeneratedComplexity: 0
-                },
-                refactoring: {
-                    rate: 0,
-                    aiCodeRefactored: 0
-                },
-                overallScore: aiMetrics.acceptanceRate || 0
-            },
-            productivity: {
-                taskCompletion: {
-                    velocityChange: aiMetrics.acceptanceRate * 0.26,
-                    cycleTime: 0,
-                    reworkRate: aiMetrics.churnRate || 0
-                },
-                flowEfficiency: {
-                    focusTime: 0,
-                    contextSwitches: 0,
-                    waitTime: 0
-                },
-                valueDelivery: {
-                    featuresShipped: aiMetrics.totalSuggestions,
-                    bugRate: 0,
-                    customerImpact: 0
-                },
-                actualGain: aiMetrics.acceptanceRate * 0.26, // Based on research
-                perceivedGain: aiMetrics.acceptanceRate * 1.83,
-                netTimeSaved: aiMetrics.totalSuggestions * 0.5 // Rough estimate
-            },
-            roi: {
-                costBenefit: {
-                    licenseCost: 20,
-                    timeSaved: aiMetrics.totalSuggestions * 0.5,
-                    timeWasted: 0,
-                    netValue: aiMetrics.totalSuggestions * 10
-                },
-                hiddenCosts: {
-                    technicalDebt: 0,
-                    maintenanceBurden: 0,
-                    knowledgeGaps: 0
-                },
-                teamImpact: {
-                    reviewTime: 0,
-                    onboardingCost: 0,
-                    collaborationFriction: 0
-                },
-                overallROI: aiMetrics.acceptanceRate > 0.5 ? 1.5 : 0.8,
-                breakEvenDays: 30
-            }
+            ai: aiMetrics,
+            code: codeMetrics,
+            time: timeMetrics,
+            quality: qualityMetrics,
+            productivity: productivityMetrics,
+            roi: roiMetrics
         };
 
-        // Always store metrics (even if all zeros) so dashboard has data structure
+        // 4. Store the result
         await stor.storeMetrics(metrics);
-        logger.info(`Metrics calculated and stored: ROI=${metrics.roi?.overallROI ?? 0}, Suggestions=${aiMetrics.totalSuggestions}, Acceptance=${aiMetrics.acceptanceRate}`);
+        logger.info(`Full metrics calculated and stored. ROI=${metrics.roi?.overallROI}`);
+        
     } catch (error) {
         logger.error('Error in calculateAndStoreMetrics', error);
         throw error;

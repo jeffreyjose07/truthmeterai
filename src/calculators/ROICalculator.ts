@@ -4,16 +4,24 @@ export class ROICalculator {
     private readonly DEVELOPER_HOURLY_RATE = 75;
     private readonly AI_TOOL_MONTHLY_COST = 15;
 
-    async calculate(): Promise<EconomicMetrics> {
-        const timeSaved = await this.calculateTimeSaved();
-        const timeWasted = await this.calculateTimeWasted();
-        const netTimeSaved = timeSaved - timeWasted;
+    async calculate(productivityMetrics?: any): Promise<EconomicMetrics> {
+        // Use netTimeSaved from productivity metrics if available
+        const netTimeSaved = productivityMetrics?.netTimeSaved || 0;
+        
+        // Split netTimeSaved into saved/wasted for reporting (simplified)
+        // If net is positive, we saved time. If negative, we wasted time.
+        const timeSaved = netTimeSaved > 0 ? netTimeSaved : 0;
+        const timeWasted = netTimeSaved < 0 ? Math.abs(netTimeSaved) : 0;
 
         const dollarValue = netTimeSaved * this.DEVELOPER_HOURLY_RATE;
         const monthlyCost = this.AI_TOOL_MONTHLY_COST;
-        const monthlyValue = dollarValue * 160; // Assuming 160 work hours/month
-
-        const roi = monthlyValue / monthlyCost;
+        
+        // ROI = (Value - Cost) / Cost
+        // Value is projected monthly value based on this week's saving rate (x4)
+        const monthlyValue = dollarValue * 4; 
+        
+        // Avoid division by zero
+        const roi = monthlyCost > 0 ? (monthlyValue - monthlyCost) / monthlyCost : 0;
 
         const hiddenCosts = await this.calculateHiddenCosts();
         const teamImpact = await this.calculateTeamImpact();

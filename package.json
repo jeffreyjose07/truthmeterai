@@ -100,7 +100,7 @@
     "pretest": "npm run compile && npm run lint",
     "lint": "eslint src --ext ts",
     "test": "node ./out/test/runTest.js",
-    "test:unit": "npm run compile && mocha --require ts-node/register 'src/test/suite/**/*.test.ts'",
+    "test:unit": "npm run compile && mocha --ui tdd --exit --require ts-node/register --require src/test/unit-setup.ts 'src/test/suite/**/*.test.ts'",
     "test:coverage": "nyc npm run test:unit",
     "clean": "rm -rf out *.vsix",
     "package": "vsce package",

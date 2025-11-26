@@ -113,7 +113,14 @@ suite('ROICalculator Test Suite', () => {
     });
 
     test('should show time wasted exceeds time saved', async () => {
-        const result = await calculator.calculate();
+        // Mock metrics where time wasted > time saved
+        // netTimeSaved = timeSaved - timeWasted
+        // So if netTimeSaved is negative, then timeWasted > timeSaved
+        const mockMetrics = {
+            netTimeSaved: -0.6 // Negative net time means wasted > saved
+        };
+        
+        const result = await calculator.calculate(mockMetrics);
 
         // Based on research: time wasted (3.1h) > time saved (2.5h)
         assert.ok(result.costBenefit.timeWasted > result.costBenefit.timeSaved);

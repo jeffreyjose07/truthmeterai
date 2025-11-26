@@ -1,29 +1,50 @@
 import { TrueProductivityMetrics } from '../types/metrics';
 
 export class ProductivityAnalyzer {
-    async analyze(): Promise<TrueProductivityMetrics> {
+    async analyze(aiMetrics?: any, codeMetrics?: any, timeMetrics?: any): Promise<TrueProductivityMetrics> {
+        // Default values if no metrics provided
+        const acceptanceRate = aiMetrics?.acceptanceRate || 0;
+        const totalSuggestions = aiMetrics?.totalSuggestions || 0;
+        const activeTimeHours = (timeMetrics?.totalActiveTime || 0) / 60;
+        
+        // Calculate velocity change based on AI acceptance rate
+        // Research suggests 0-26% actual gain, highly correlated with acceptance
+        const velocityChange = acceptanceRate * 0.26; 
+
+        // Calculate rework rate based on churn if available
+        const reworkRate = aiMetrics?.churnRate || 0.15; // Default 15% rework
+
+        // Calculate time saved: avg 5 mins saved per accepted suggestion
+        const timeSavedHours = (totalSuggestions * acceptanceRate) * (5 / 60);
+        
+        // Calculate time lost: review time (2 min) + fix time (variable based on rework)
+        const reviewTimeHours = totalSuggestions * (2 / 60);
+        const fixTimeHours = (totalSuggestions * acceptanceRate * reworkRate) * (15 / 60);
+        
+        const netTimeSaved = timeSavedHours - (reviewTimeHours + fixTimeHours);
+
         return {
             taskCompletion: {
-                velocityChange: 0.12,
-                cycleTime: 3.5,
-                reworkRate: 0.28
+                velocityChange: velocityChange,
+                cycleTime: 0, // Needs git data for real cycle time
+                reworkRate: reworkRate
             },
 
             flowEfficiency: {
-                focusTime: 2.5,
-                contextSwitches: 15,
-                waitTime: 0.5
+                focusTime: activeTimeHours,
+                contextSwitches: 0, // TODO: Add window focus tracking
+                waitTime: 0
             },
 
             valueDelivery: {
-                featuresShipped: 3,
-                bugRate: 0.8,
-                customerImpact: 7
+                featuresShipped: Math.floor(totalSuggestions / 10), // Rough proxy
+                bugRate: 0, // Needs bug tracker integration
+                customerImpact: 0
             },
 
-            actualGain: -0.19,
-            perceivedGain: 0.20,
-            netTimeSaved: -0.6
+            actualGain: velocityChange,
+            perceivedGain: acceptanceRate * 1.5, // Perceived gain is usually much higher
+            netTimeSaved: netTimeSaved
         };
     }
 

@@ -25,13 +25,14 @@ export class DashboardProvider {
         } else {
             this.panel = vscode.window.createWebviewPanel(
                 'aiMetricsDashboard',
-                'AI Metrics Dashboard',
+                'AI Impact Dashboard',
                 column || vscode.ViewColumn.One,
                 {
                     enableScripts: true,
                     localResourceRoots: [
                         vscode.Uri.file(path.join(this.context.extensionPath, 'resources'))
-                    ]
+                    ],
+                    retainContextWhenHidden: true
                 }
             );
 
@@ -71,339 +72,171 @@ export class DashboardProvider {
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>AI Metrics Dashboard</title>
+            <title>AI Impact Dashboard</title>
             <link href="${styleUri}" rel="stylesheet">
+            <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+            <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
         </head>
-        <body>
-            <div class="dashboard-container">
-                <header class="dashboard-header">
-                    <div class="header-content">
-                        <h1 class="dashboard-title">AI Coding Assistant Metrics</h1>
-                        <p class="dashboard-subtitle">Research-Backed Impact Analysis</p>
-                    </div>
-                    <div class="header-actions">
-                        <button class="btn-secondary" onclick="refreshData()">
-                            <span class="btn-icon">↻</span>
-                            Refresh
-                        </button>
-                        <button class="btn-primary" onclick="exportReport()">
-                            <span class="btn-icon">↓</span>
-                            Export
-                        </button>
-                    </div>
-                </header>
-
-                <div class="alert-banner" id="alertBanner" style="display: none;"></div>
-
-                <div class="methodology-section">
-                    <div class="methodology-header">
-                        <h2>
-                            <span class="methodology-icon">📖</span>
-                            How Metrics Are Generated
-                        </h2>
-                        <button class="methodology-toggle" onclick="toggleMethodology()" id="methodologyToggle">
-                            <span class="toggle-icon">▼</span>
-                            <span class="toggle-text">Hide Details</span>
-                        </button>
-                    </div>
-                    <div class="methodology-content" id="methodologyContent">
-                        <div class="methodology-grid">
-                            <div class="methodology-card">
-                                <h3>🔍 Data Collection</h3>
-                                <ul>
-                                    <li><strong>AI Detection:</strong> Automatically identifies AI-generated code by analyzing patterns like JSDoc comments, consistent formatting, and rapid text insertion</li>
-                                    <li><strong>Code Changes:</strong> Tracks all file modifications, additions, and deletions in real-time through VS Code's file system events</li>
-                                    <li><strong>Time Tracking:</strong> Monitors active coding sessions, detecting activity through editor focus and typing events</li>
-                                    <li><strong>Context Analysis:</strong> Analyzes code complexity, duplication patterns, and churn by examining file contents and git history</li>
-                                </ul>
-                            </div>
-
-                            <div class="methodology-card">
-                                <h3>📊 Metric Calculation</h3>
-                                <ul>
-                                    <li><strong>ROI Analysis:</strong> Compares time saved (code generation speed) vs. time spent (review, debugging, refactoring) multiplied by your hourly rate</li>
-                                    <li><strong>Code Churn:</strong> Measures percentage of AI-generated code rewritten within 14 days, indicating code quality and appropriateness</li>
-                                    <li><strong>Duplication:</strong> Detects similar code patterns using hash-based analysis, comparing before/after AI adoption rates</li>
-                                    <li><strong>Quality Scores:</strong> Analyzes cyclomatic complexity, cognitive load, nesting depth, and refactoring frequency</li>
-                                </ul>
-                            </div>
-
-                            <div class="methodology-card">
-                                <h3>🔬 Research Foundation</h3>
-                                <ul>
-                                    <li><strong>GitClear 2024:</strong> Found 41% increase in code churn and technical debt with AI assistance</li>
-                                    <li><strong>Uplevel 2024:</strong> Documented gap between perceived (126-183%) and actual (0-26%) productivity gains</li>
-                                    <li><strong>Microsoft Research:</strong> Studies on developer productivity and AI coding assistant impact</li>
-                                    <li><strong>Industry Standards:</strong> DRY principle, cyclomatic complexity thresholds, code quality metrics</li>
-                                </ul>
-                            </div>
-
-                            <div class="methodology-card">
-                                <h3>🔒 Privacy & Storage</h3>
-                                <ul>
-                                    <li><strong>Local Only:</strong> All data stays on your machine - nothing sent to external servers</li>
-                                    <li><strong>Limited Storage:</strong> Keeps last 1000 events in circular buffer to prevent excessive memory use</li>
-                                    <li><strong>No Code Content:</strong> Stores only metadata (file types, line counts, timestamps) not actual code</li>
-                                    <li><strong>Exportable:</strong> Full control to export or clear your data at any time</li>
-                                </ul>
-                            </div>
-                        </div>
-
-                        <div class="methodology-note">
-                            <strong>💡 Note:</strong> Metrics are calculated based on actual workspace activity. Start coding with AI assistance to see real-time analysis.
-                            Each metric card below has detailed explanations - click "About this metric" or hover over ℹ️ icons for specifics.
-                        </div>
-                    </div>
-                </div>
-
-                <div id="loadingState" class="loading-state">
-                    <div class="loading-spinner"></div>
-                    <p>Collecting metrics data...</p>
-                    <p class="loading-hint">Start coding to begin tracking AI assistant impact</p>
-                </div>
-
-                <div id="metricsContainer" style="display: none;">
-                    <div class="metrics-grid">
-                        <div class="metric-card card-primary">
-                            <div class="card-header">
-                                <div class="card-title">
-                                    <span class="card-icon">📊</span>
-                                    <span>Actual ROI</span>
-                                </div>
-                                <span class="metric-trend" id="roiTrend">—</span>
-                            </div>
-                            <div class="card-body">
-                                <div class="metric-value" id="roiValue">—</div>
-                                <div class="metric-label">Return on Investment</div>
-                                <div class="metric-detail" id="perceivedROIDetail" style="display: none;">
-                                    Perceived: <span id="perceivedROI">—</span>
-                                </div>
-                            </div>
-                            <div class="card-footer" id="roiInsight"></div>
-                            <div class="metric-explanation">
-                                <button class="explanation-toggle" onclick="toggleExplanation(this)">
-                                    <span class="toggle-icon">▶</span>
-                                    <span class="toggle-text">About this metric</span>
-                                </button>
-                                <div class="explanation-content">
-                                    <div class="explanation-section">
-                                        <strong>What it measures:</strong>
-                                        <p>The actual productivity impact of AI coding assistance, accounting for both time saved and time wasted.</p>
-                                    </div>
-                                    <div class="explanation-section">
-                                        <strong>How it's calculated:</strong>
-                                        <ul>
-                                            <li><strong>Time Saved:</strong> Hours saved from faster code generation</li>
-                                            <li><strong>Time Wasted:</strong> Hours spent fixing, refactoring, and reviewing AI code</li>
-                                            <li><strong>Cost-Benefit:</strong> (Time Saved - Time Wasted) × Hourly Rate - License Cost</li>
-                                            <li><strong>ROI:</strong> Cost-Benefit / (License Cost + Hidden Costs)</li>
-                                        </ul>
-                                    </div>
-                                    <div class="explanation-section">
-                                        <strong>Research basis:</strong>
-                                        <ul>
-                                            <li>Studies show perceived gains (126-183%) differ significantly from actual gains (0-26%)</li>
-                                            <li>GitClear research found AI code requires more rework and generates technical debt</li>
-                                            <li>Uplevel data shows 41% more code churn with AI assistance</li>
-                                        </ul>
-                                    </div>
-                                    <div class="explanation-section">
-                                        <strong>Interpretation:</strong>
-                                        <ul>
-                                            <li><span class="value-excellent">&gt;150%:</span> Excellent ROI, AI is highly beneficial</li>
-                                            <li><span class="value-good">100-150%:</span> Good ROI, positive impact</li>
-                                            <li><span class="value-marginal">50-100%:</span> Marginal ROI, room for improvement</li>
-                                            <li><span class="value-poor">&lt;50%:</span> Poor ROI, reconsider AI usage patterns</li>
-                                        </ul>
-                                    </div>
-                                    <div class="explanation-source">
-                                        <em>Source: GitClear 2024, Uplevel 2024, Microsoft Research</em>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="metric-card card-warning">
-                            <div class="card-header">
-                                <div class="card-title">
-                                    <span class="card-icon">🔄</span>
-                                    <span>Code Churn</span>
-                                </div>
-                                <span class="metric-trend" id="churnTrend">—</span>
-                            </div>
-                            <div class="card-body">
-                                <div class="metric-value" id="churnValue">—</div>
-                                <div class="metric-label">Code rewritten within 14 days</div>
-                            </div>
-                            <div class="card-footer" id="churnInsight"></div>
-                            <div class="metric-explanation">
-                                <button class="explanation-toggle" onclick="toggleExplanation(this)">
-                                    <span class="toggle-icon">▶</span>
-                                    <span class="toggle-text">About this metric</span>
-                                </button>
-                                <div class="explanation-content">
-                                    <div class="explanation-section">
-                                        <strong>What it measures:</strong>
-                                        <p>Percentage of AI-generated code that gets rewritten or deleted within 14 days of creation.</p>
-                                    </div>
-                                    <div class="explanation-section">
-                                        <strong>How it's calculated:</strong>
-                                        <ul>
-                                            <li>Track all AI-generated code additions</li>
-                                            <li>Monitor modifications/deletions within 14-day window</li>
-                                            <li><strong>Churn Rate =</strong> (Lines Changed or Deleted) / (Total Lines Added) × 100%</li>
-                                        </ul>
-                                    </div>
-                                    <div class="explanation-section">
-                                        <strong>Research basis:</strong>
-                                        <ul>
-                                            <li>GitClear found 41% more code churn with AI assistance</li>
-                                            <li>Higher churn indicates AI-generated code needs significant rework</li>
-                                            <li>Suggests AI may not fully understand context or requirements</li>
-                                        </ul>
-                                    </div>
-                                    <div class="explanation-section">
-                                        <strong>Interpretation:</strong>
-                                        <ul>
-                                            <li><span class="value-excellent">0-15%:</span> Excellent - Code is stable and well-suited</li>
-                                            <li><span class="value-good">15-30%:</span> Good - Normal amount of refinement</li>
-                                            <li><span class="value-marginal">30-50%:</span> Warning - Significant rework needed</li>
-                                            <li><span class="value-poor">&gt;50%:</span> Critical - AI output may not be appropriate for task</li>
-                                        </ul>
-                                    </div>
-                                    <div class="explanation-section">
-                                        <strong>Why it matters:</strong>
-                                        <ul>
-                                            <li>High churn wastes developer time on rework</li>
-                                            <li>Indicates poor prompt quality or task complexity</li>
-                                            <li>May signal that AI is being used for inappropriate tasks</li>
-                                        </ul>
-                                    </div>
-                                    <div class="explanation-source">
-                                        <em>Source: GitClear 2024, Uplevel 2024</em>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="metric-card card-danger">
-                            <div class="card-header">
-                                <div class="card-title">
-                                    <span class="card-icon">📋</span>
-                                    <span>Code Duplication</span>
-                                    <span class="info-icon" title="Code Duplication Metric
-
-What it measures: Increase in duplicated or copy-pasted code patterns after AI adoption.
-
-How it's calculated:
-• Baseline: Measure duplication rate before AI usage
-• Current: Measure duplication rate with AI
-• Increase Factor = Current Duplication / Baseline Duplication
-• Also tracks copy-paste ratio and clone detection
-
-Research basis:
-• Studies show AI can generate similar patterns repeatedly
-• Lack of context awareness leads to duplication
-• Copy-paste mentality when accepting AI suggestions
-• Technical debt accumulates from repetitive code
-
-Interpretation:
-• 1.0x: No change - AI maintains code quality
-• 1.0-1.5x: Acceptable - Minor increase
-• 1.5-2.5x: Warning - Significant duplication emerging
-• >2.5x: Critical - Technical debt accumulating rapidly
-
-Why it matters:
-• Duplicated code is harder to maintain
-• Bug fixes must be applied in multiple places
-• Increases codebase size without adding value
-• Violates DRY (Don't Repeat Yourself) principle
-
-Best practices:
-• Review AI suggestions for existing patterns
-• Refactor duplicates into reusable functions
-• Provide better context in AI prompts
-
-Source: Industry best practices, DRY principle">ℹ️</span>
-                                </div>
-                                <span class="metric-trend" id="duplicationTrend">—</span>
-                            </div>
-                            <div class="card-body">
-                                <div class="metric-value" id="duplicationValue">—</div>
-                                <div class="metric-label">Copy-paste code increase</div>
-                            </div>
-                            <div class="card-footer" id="duplicationInsight"></div>
-                        </div>
-
-                        <div class="metric-card card-info">
-                            <div class="card-header">
-                                <div class="card-title">
-                                    <span class="card-icon">⏱️</span>
-                                    <span>Time Impact</span>
-                                    <span class="info-icon" title="Net Time Impact Metric
-
-What it measures: Actual hours saved or lost per week when using AI coding assistants.
-
-How it's calculated:
-• Time Saved: Code generation speed × Acceptance rate
-• Time Spent: Code review + Bug fixes + Refactoring + Context switching
-• Net Time = Time Saved - Time Spent
-• Normalized to hours per week
-
-Research basis:
-• Multiple studies show perception vs. reality gap
-• Developers feel 126-183% more productive
-• Actual measurements show 0-26% productivity gain
-• Additional time spent on:
-  - Reviewing AI suggestions: ~20-30% overhead
-  - Fixing AI bugs: ~15-25% of generated code
-  - Refactoring poor patterns: ~10-20% of code
-
-Interpretation:
-• >5h/week: Excellent - Significant time savings
-• 2-5h/week: Good - Notable productivity boost
-• 0-2h/week: Marginal - Small benefit
-• <0h/week: Negative - AI is slowing you down
-
-Why perception differs from reality:
-• Fast code generation feels productive
-• Hidden costs in review and rework
-• Context switching overhead not noticed
-• Comparison to typing speed, not thinking time
-
-Actions for improvement:
-• Focus AI on boilerplate and repetitive tasks
-• Improve prompt engineering
-• Set up better review processes
-• Avoid AI for complex business logic
-
-Source: Microsoft Research, GitHub Copilot studies, GitClear 2024">ℹ️</span>
-                                </div>
-                                <span class="metric-trend" id="timeTrend">—</span>
-                            </div>
-                            <div class="card-body">
-                                <div class="metric-value" id="timeValue">—</div>
-                                <div class="metric-label">Net hours per week</div>
-                            </div>
-                            <div class="card-footer" id="timeInsight"></div>
-                        </div>
-                    </div>
-
-                    <div class="recommendations-section" id="recommendationsSection" style="display: none;">
-                        <div class="section-header">
-                            <h2>Recommendations</h2>
-                            <p class="section-subtitle">Data-driven insights to optimize AI usage</p>
-                        </div>
-                        <div id="recommendations" class="recommendations-list"></div>
-                    </div>
+        <body class="material-theme">
+            <div class="app-bar">
+                <div class="app-bar-content">
+                    <span class="material-icons-round app-logo">analytics</span>
+                    <h1>TruthMeter AI</h1>
+                    <div class="spacer"></div>
+                    <button class="md-button" onclick="refreshData()">
+                        <span class="material-icons-round">refresh</span>
+                        Refresh
+                    </button>
+                    <button class="md-button outlined" onclick="exportReport()">
+                        <span class="material-icons-round">download</span>
+                        Export
+                    </button>
                 </div>
             </div>
 
+            <main class="content">
+                <div id="loadingState" class="loading-container">
+                    <div class="spinner"></div>
+                    <p>Analyzing productivity metrics...</p>
+                </div>
+
+                <div id="dashboardContent" style="display: none;">
+                    
+                    <!-- KPI Cards -->
+                    <div class="kpi-grid">
+                        <div class="md-card kpi-card primary">
+                            <div class="card-header">
+                                <span class="card-title">Net Productivity</span>
+                                <span class="material-icons-round icon">speed</span>
+                            </div>
+                            <div class="card-body">
+                                <div class="kpi-value" id="roiValue">--%</div>
+                                <div class="kpi-sub">Actual Gain</div>
+                            </div>
+                            <div class="card-footer">
+                                <span class="trend" id="roiTrend">--</span>
+                                <span class="footer-text">vs. manual coding</span>
+                            </div>
+                        </div>
+
+                        <div class="md-card kpi-card secondary">
+                            <div class="card-header">
+                                <span class="card-title">Time Impact</span>
+                                <span class="material-icons-round icon">schedule</span>
+                            </div>
+                            <div class="card-body">
+                                <div class="kpi-value" id="timeValue">--h</div>
+                                <div class="kpi-sub">Net Saved/Week</div>
+                            </div>
+                            <div class="card-footer">
+                                <span class="trend" id="timeTrend">--</span>
+                                <span class="footer-text">accounting for cleanup</span>
+                            </div>
+                        </div>
+
+                        <div class="md-card kpi-card warning">
+                            <div class="card-header">
+                                <span class="card-title">Code Churn</span>
+                                <span class="material-icons-round icon">delete_sweep</span>
+                            </div>
+                            <div class="card-body">
+                                <div class="kpi-value" id="churnValue">--%</div>
+                                <div class="kpi-sub">Rewritten Code</div>
+                            </div>
+                            <div class="card-footer">
+                                <span class="trend" id="churnTrend">--</span>
+                                <span class="footer-text">AI code stability</span>
+                            </div>
+                        </div>
+
+                        <div class="md-card kpi-card info">
+                            <div class="card-header">
+                                <span class="card-title">Duplication</span>
+                                <span class="material-icons-round icon">content_copy</span>
+                            </div>
+                            <div class="card-body">
+                                <div class="kpi-value" id="duplicationValue">--x</div>
+                                <div class="kpi-sub">Growth Factor</div>
+                            </div>
+                            <div class="card-footer">
+                                <span class="trend" id="duplicationTrend">--</span>
+                                <span class="footer-text">vs. clean code</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="grid-row">
+                        <!-- Main Insight Card -->
+                        <div class="md-card large-card">
+                            <div class="card-header-row">
+                                <h2>ROI Analysis</h2>
+                                <div class="chip" id="roiStatus">--</div>
+                            </div>
+                            <div class="card-content-row">
+                                <div class="metric-group">
+                                    <label>Perceived Gain</label>
+                                    <div class="progress-bar-container">
+                                        <div class="progress-bar perceived" id="perceivedBar" style="width: 0%"></div>
+                                    </div>
+                                    <span class="metric-text" id="perceivedROI">--%</span>
+                                </div>
+                                <div class="metric-group">
+                                    <label>Actual Gain</label>
+                                    <div class="progress-bar-container">
+                                        <div class="progress-bar actual" id="actualBar" style="width: 0%"></div>
+                                    </div>
+                                    <span class="metric-text" id="actualROI">--%</span>
+                                </div>
+                            </div>
+                            <div class="insight-box">
+                                <span class="material-icons-round">lightbulb</span>
+                                <p id="roiInsight">Analysis pending...</p>
+                            </div>
+                        </div>
+
+                        <!-- Quality Alerts -->
+                        <div class="md-card list-card">
+                            <div class="card-header-row">
+                                <h2>Quality Insights</h2>
+                            </div>
+                            <div class="list-container" id="alertsList">
+                                <!-- Alerts injected here -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Methodology Section (Collapsible) -->
+                    <div class="md-card collapsible-card">
+                        <div class="card-header-row" onclick="toggleMethodology()">
+                            <div class="title-group">
+                                <span class="material-icons-round">science</span>
+                                <h2>Research Methodology</h2>
+                            </div>
+                            <span class="material-icons-round expand-icon" id="methodologyIcon">expand_more</span>
+                        </div>
+                        <div class="card-content-hidden" id="methodologyContent">
+                            <div class="methodology-grid">
+                                <div class="method-item">
+                                    <strong>Productivity:</strong> Measured by velocity change adjusted for rework rate (GitClear 2024).
+                                </div>
+                                <div class="method-item">
+                                    <strong>Net Time:</strong> (Suggestions × Avg Save) - (Review Time + Fix Time).
+                                </div>
+                                <div class="method-item">
+                                    <strong>Churn:</strong> % of AI-generated lines modified/deleted within 14 days.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </main>
+
             <script>
                 const vscode = acquireVsCodeApi();
-                let hasData = false;
-
+                
                 function refreshData() {
+                    document.getElementById('loadingState').style.display = 'flex';
+                    document.getElementById('dashboardContent').style.display = 'none';
                     vscode.postMessage({ command: 'refresh' });
                 }
 
@@ -413,35 +246,13 @@ Source: Microsoft Research, GitHub Copilot studies, GitClear 2024">ℹ️</span>
 
                 function toggleMethodology() {
                     const content = document.getElementById('methodologyContent');
-                    const toggle = document.getElementById('methodologyToggle');
-                    const icon = toggle.querySelector('.toggle-icon');
-                    const text = toggle.querySelector('.toggle-text');
-
-                    if (content.style.display === 'none') {
-                        content.style.display = 'block';
-                        icon.textContent = '▼';
-                        text.textContent = 'Hide Details';
+                    const icon = document.getElementById('methodologyIcon');
+                    if (content.classList.contains('expanded')) {
+                        content.classList.remove('expanded');
+                        icon.textContent = 'expand_more';
                     } else {
-                        content.style.display = 'none';
-                        icon.textContent = '▶';
-                        text.textContent = 'Show Details';
-                    }
-                }
-
-                function toggleExplanation(button) {
-                    const card = button.closest('.metric-explanation');
-                    const content = card.querySelector('.explanation-content');
-                    const icon = button.querySelector('.toggle-icon');
-                    const text = button.querySelector('.toggle-text');
-
-                    if (content.style.display === 'none' || content.style.display === '') {
-                        content.style.display = 'block';
-                        icon.textContent = '▼';
-                        text.textContent = 'Hide details';
-                    } else {
-                        content.style.display = 'none';
-                        icon.textContent = '▶';
-                        text.textContent = 'About this metric';
+                        content.classList.add('expanded');
+                        icon.textContent = 'expand_less';
                     }
                 }
 
@@ -453,119 +264,81 @@ Source: Microsoft Research, GitHub Copilot studies, GitClear 2024">ℹ️</span>
                 });
 
                 function updateDashboard(data) {
-                    hasData = data.hasData;
+                    document.getElementById('loadingState').style.display = 'none';
+                    document.getElementById('dashboardContent').style.display = 'block';
 
-                    // Always show metrics container if we have data structure (even if values are 0)
-                    // Only show loading if we truly have no metrics object at all
-                    if (hasData || (data.roi !== null || data.churn !== null || data.duplication !== null || data.netTime !== null)) {
-                        document.getElementById('loadingState').style.display = 'none';
-                        document.getElementById('metricsContainer').style.display = 'block';
-                    } else {
-                        // No data yet - show helpful message
-                        document.getElementById('loadingState').style.display = 'flex';
-                        document.getElementById('metricsContainer').style.display = 'none';
-                        const loadingMsg = document.querySelector('#loadingState p');
-                        if (loadingMsg) {
-                            loadingMsg.textContent = 'Tracking started! Make some code changes with AI assistance to see metrics.';
-                        }
-                        return;
+                    if (!data.hasData) {
+                        // Show empty state or zeros
                     }
 
                     // Update ROI
-                    const roiElement = document.getElementById('roiValue');
-                    if (data.roi !== null && data.roi !== undefined) {
-                        const roiValue = Math.round(data.roi * 100);
-                        roiElement.textContent = (roiValue > 0 ? '+' : '') + roiValue + '%';
-                        roiElement.className = 'metric-value ' + (roiValue > 0 ? 'positive' : 'negative');
-                        document.getElementById('roiTrend').textContent = roiValue > 0 ? '↑' : '↓';
-                        document.getElementById('roiInsight').textContent = roiValue > 0
-                            ? 'Positive impact on productivity'
-                            : 'Cost exceeds benefit';
-
-                        if (data.perceivedROI) {
-                            document.getElementById('perceivedROIDetail').style.display = 'block';
-                            document.getElementById('perceivedROI').textContent = '+' + Math.round(data.perceivedROI * 100) + '%';
-                        }
-                    } else {
-                        roiElement.textContent = 'Calculating...';
-                        roiElement.className = 'metric-value';
-                    }
+                    const roi = data.roi || 0;
+                    updateMetric('roi', (roi * 100).toFixed(0) + '%', roi > 0 ? 'positive' : 'negative');
+                    
+                    // Update Time
+                    const time = data.netTime || 0;
+                    updateMetric('time', (time > 0 ? '+' : '') + time.toFixed(1) + 'h', time > 0 ? 'positive' : 'negative');
 
                     // Update Churn
-                    const churnElement = document.getElementById('churnValue');
-                    if (data.churn !== null && data.churn !== undefined) {
-                        const churnValue = Math.round(data.churn * 100);
-                        churnElement.textContent = churnValue + '%';
-                        churnElement.className = 'metric-value ' + (churnValue > 30 ? 'negative' : 'positive');
-                        document.getElementById('churnTrend').textContent = churnValue > 30 ? '↑' : '↓';
-                        document.getElementById('churnInsight').textContent = churnValue > 30
-                            ? 'High rewrite rate detected'
-                            : 'Healthy code stability';
-                    } else {
-                        churnElement.textContent = 'Calculating...';
-                    }
+                    const churn = data.churn || 0;
+                    updateMetric('churn', (churn * 100).toFixed(0) + '%', churn > 0.3 ? 'negative' : 'positive');
 
                     // Update Duplication
-                    const dupElement = document.getElementById('duplicationValue');
-                    if (data.duplication !== null && data.duplication !== undefined) {
-                        dupElement.textContent = data.duplication.toFixed(1) + 'x';
-                        dupElement.className = 'metric-value ' + (data.duplication > 2 ? 'negative' : 'positive');
-                        document.getElementById('duplicationTrend').textContent = data.duplication > 2 ? '↑' : '↓';
-                        document.getElementById('duplicationInsight').textContent = data.duplication > 2
-                            ? 'Technical debt increasing'
-                            : 'Good code reuse';
+                    const dup = data.duplication || 0;
+                    updateMetric('duplication', dup.toFixed(1) + 'x', dup > 1.5 ? 'negative' : 'positive');
+
+                    // Update Bars
+                    const perceived = data.perceivedROI || 0;
+                    document.getElementById('perceivedROI').textContent = (perceived * 100).toFixed(0) + '%';
+                    document.getElementById('perceivedBar').style.width = Math.min(perceived * 100, 100) + '%';
+                    
+                    document.getElementById('actualROI').textContent = (roi * 100).toFixed(0) + '%';
+                    document.getElementById('actualBar').style.width = Math.min(Math.max(roi * 100, 0), 100) + '%';
+
+                    // Insights
+                    const insight = document.getElementById('roiInsight');
+                    const status = document.getElementById('roiStatus');
+                    
+                    if (roi > 1) {
+                        insight.textContent = "AI is delivering significant value. Expand usage.";
+                        status.textContent = "Excellent";
+                        status.className = "chip success";
+                    } else if (roi > 0) {
+                        insight.textContent = "Positive impact, but watch for hidden costs.";
+                        status.textContent = "Good";
+                        status.className = "chip warning";
                     } else {
-                        dupElement.textContent = 'Calculating...';
+                        insight.textContent = "Costs (review/fixes) are outweighing benefits.";
+                        status.textContent = "Negative";
+                        status.className = "chip danger";
                     }
 
-                    // Update Time Impact
-                    const timeElement = document.getElementById('timeValue');
-                    if (data.netTime !== null && data.netTime !== undefined) {
-                        const hours = data.netTime.toFixed(1);
-                        timeElement.textContent = (data.netTime > 0 ? '+' : '') + hours + 'h';
-                        timeElement.className = 'metric-value ' + (data.netTime > 0 ? 'positive' : 'negative');
-                        document.getElementById('timeTrend').textContent = data.netTime > 0 ? '↑' : '↓';
-                        document.getElementById('timeInsight').textContent = data.netTime > 0
-                            ? 'Net time saved'
-                            : 'More time spent than saved';
-                    } else {
-                        timeElement.textContent = 'Calculating...';
-                    }
-
-                    // Update Recommendations
+                    // Alerts
+                    const alertsContainer = document.getElementById('alertsList');
+                    alertsContainer.innerHTML = '';
                     if (data.recommendations && data.recommendations.length > 0) {
-                        document.getElementById('recommendationsSection').style.display = 'block';
-                        updateRecommendations(data.recommendations);
-                    }
-
-                    // Show Alerts
-                    if (data.alerts && data.alerts.length > 0) {
-                        showAlerts(data.alerts);
+                        data.recommendations.forEach(rec => {
+                            const div = document.createElement('div');
+                            div.className = 'alert-item';
+                            // Use simple string concatenation to avoid template literal issues in TypeScript
+                            div.innerHTML = '<span class="material-icons-round">' + (rec.icon || 'info') + '</span>' +
+                                           '<div class="alert-content">' +
+                                               '<strong>' + rec.title + '</strong>' +
+                                               '<p>' + rec.text + '</p>' +
+                                           '</div>';
+                            alertsContainer.appendChild(div);
+                        });
+                    } else {
+                        alertsContainer.innerHTML = '<div class="empty-state">No critical alerts.</div>';
                     }
                 }
 
-                function updateRecommendations(recommendations) {
-                    const container = document.getElementById('recommendations');
-                    container.innerHTML = recommendations.map(rec =>
-                        '<div class="recommendation-card">' +
-                        '<div class="rec-icon">' + rec.icon + '</div>' +
-                        '<div class="rec-content">' +
-                        '<div class="rec-title">' + rec.title + '</div>' +
-                        '<div class="rec-text">' + rec.text + '</div>' +
-                        '</div>' +
-                        '</div>'
-                    ).join('');
-                }
-
-                function showAlerts(alerts) {
-                    const banner = document.getElementById('alertBanner');
-                    banner.innerHTML = alerts.map(alert =>
-                        '<div class="alert alert-' + alert.type + '">' +
-                        '<span class="alert-icon">' + (alert.type === 'error' ? '⚠️' : 'ℹ️') + '</span>' +
-                        '<span class="alert-message">' + alert.message + '</span>' +
-                        '</div>'
-                    ).join('');
-                    banner.style.display = 'block';
+                function updateMetric(id, value, trendClass) {
+                    const el = document.getElementById(id + 'Value');
+                    el.textContent = value;
+                    // Reset classes
+                    el.classList.remove('text-positive', 'text-negative');
+                    el.classList.add('text-' + trendClass);
                 }
             </script>
         </body>
@@ -579,37 +352,21 @@ Source: Microsoft Research, GitHub Copilot studies, GitClear 2024">ℹ️</span>
                 await this.onRefreshCallback();
             } catch (error) {
                 console.error('Error in refresh callback:', error);
+                // Do not rethrow, proceed to load stored data
             }
         }
 
         const metrics = await this.storage.getLatestMetrics();
-
-        console.log('[Dashboard] Retrieved metrics:', JSON.stringify(metrics, null, 2));
-
-        // Check if we have metrics data (even if values are 0, we have data structure)
-        // A metrics object exists if it has been calculated and stored
-        const hasActualData = metrics && (
-            (metrics.roi !== undefined && metrics.roi !== null) ||
-            (metrics.quality !== undefined && metrics.quality !== null) ||
-            (metrics.productivity !== undefined && metrics.productivity !== null)
-        );
-
-        console.log('[Dashboard] hasActualData =', hasActualData);
-
-        // Always provide data structure, even if values are 0
-        // This allows the dashboard to display "0" values instead of showing loading state
+        
+        // Calculate derived values for display
         const dashboardData = {
-            hasData: hasActualData,
+            hasData: !!metrics,
             roi: metrics?.roi?.overallROI ?? 0,
             perceivedROI: metrics?.productivity?.perceivedGain ?? 0,
             churn: metrics?.quality?.codeChurn?.rate ?? 0,
-            duplication: metrics?.quality?.duplication?.cloneRate
-                ? metrics.quality.duplication.cloneRate / (metrics.quality.duplication.beforeAI || 1)
-                : 0,
+            duplication: metrics?.quality?.duplication?.cloneRate ?? 0,
             netTime: metrics?.productivity?.netTimeSaved ?? 0,
-
-            recommendations: hasActualData ? this.generateRecommendations(metrics) : [],
-            alerts: hasActualData ? this.generateAlerts(metrics) : []
+            recommendations: this.generateRecommendations(metrics)
         };
 
         this.panel?.webview.postMessage({
@@ -619,87 +376,32 @@ Source: Microsoft Research, GitHub Copilot studies, GitClear 2024">ℹ️</span>
     }
 
     private generateRecommendations(metrics: any): any[] {
-        const recommendations = [];
+        const recs = [];
+        if (!metrics) {return [];}
 
-        const churnRate = metrics.quality?.codeChurn?.rate || 0;
-        const duplicationRate = metrics.quality?.duplication?.cloneRate || 0;
-        const roi = metrics.roi?.overallROI || 0;
-
-        if (churnRate > 0.3) {
-            recommendations.push({
-                icon: '⚠️',
-                title: 'High Code Churn Detected',
-                text: 'Provide clearer prompts and context to AI to reduce rewrites. Consider pair programming sessions to improve AI usage.'
-            });
+        if ((metrics.quality?.codeChurn?.rate || 0) > 0.3) {
+            recs.push({ icon: 'warning', title: 'High Churn', text: 'AI code is being rewritten frequently.' });
         }
-
-        if (duplicationRate > 0.15) {
-            recommendations.push({
-                icon: '🔄',
-                title: 'Code Duplication Increasing',
-                text: 'Enable DRY principle checks. Review AI-generated code for abstractions before accepting.'
-            });
+        if ((metrics.productivity?.netTimeSaved || 0) < 0) {
+            recs.push({ icon: 'timer_off', title: 'Time Loss', text: 'More time spent fixing than saving.' });
         }
-
-        if (roi < 1) {
-            recommendations.push({
-                icon: '💰',
-                title: 'ROI Below Expectations',
-                text: 'Focus AI usage on boilerplate code, tests, and documentation. Avoid using AI for complex business logic.'
-            });
-        } else {
-            recommendations.push({
-                icon: '✨',
-                title: 'Positive Impact',
-                text: 'Continue current usage patterns. Consider expanding AI usage to similar tasks.'
-            });
+        if (recs.length === 0) {
+            recs.push({ icon: 'check_circle', title: 'All Good', text: 'Metrics are within healthy ranges.' });
         }
-
-        recommendations.push({
-            icon: '🎓',
-            title: 'Best Practices',
-            text: 'Junior developers often see highest gains. Use AI as a learning tool with proper review processes.'
-        });
-
-        return recommendations;
-    }
-
-    private generateAlerts(metrics: any): any[] {
-        const alerts = [];
-
-        const churnRate = metrics.quality?.codeChurn?.rate || 0;
-        const roi = metrics.roi?.overallROI || 0;
-
-        if (churnRate > 0.4) {
-            alerts.push({
-                type: 'error',
-                message: 'Critical: Over 40% of AI code is being rewritten. Review AI usage patterns immediately.'
-            });
-        }
-
-        if (roi < 0) {
-            alerts.push({
-                type: 'warning',
-                message: 'AI is currently slowing down development. Consider adjusting usage patterns or providing team training.'
-            });
-        }
-
-        return alerts;
+        return recs;
     }
 
     private async exportData() {
         const data = await this.storage.exportData();
-
-        const uri = vscode.Uri.parse('untitled:ai-metrics-report.json');
-        const doc = await vscode.workspace.openTextDocument(uri);
-        await vscode.window.showTextDocument(doc, { preview: false });
-
-        const edit = new vscode.WorkspaceEdit();
-        edit.insert(uri, new vscode.Position(0, 0), data);
-        await vscode.workspace.applyEdit(edit);
+        const doc = await vscode.workspace.openTextDocument({
+            content: data,
+            language: 'json'
+        });
+        await vscode.window.showTextDocument(doc);
     }
 
     public showReport(_report: any) {
-        vscode.window.showInformationMessage('Report generated successfully');
+        vscode.window.showInformationMessage('Report generated successfully. Check dashboard for details.');
+        this.refreshData();
     }
 }
