@@ -348,7 +348,8 @@ async function calculateAndStoreMetrics(context: vscode.ExtensionContext): Promi
         const roiMetrics = await analyzers.roiCalculator!.calculate(productivityMetrics); 
 
         // 3. Construct the full metrics object
-        const metrics: AllMetrics = {
+        const metrics: AllMetrics & { timestamp: number } = {
+            timestamp: Date.now(),
             ai: aiMetrics,
             code: codeMetrics,
             time: timeMetrics,

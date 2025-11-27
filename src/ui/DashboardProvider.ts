@@ -76,6 +76,7 @@ export class DashboardProvider {
             <link href="${styleUri}" rel="stylesheet">
             <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
             <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+            <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
         </head>
         <body class="material-theme">
             <div class="app-bar">
@@ -162,6 +163,16 @@ export class DashboardProvider {
                                 <span class="trend" id="duplicationTrend">--</span>
                                 <span class="footer-text">vs. clean code</span>
                             </div>
+                        </div>
+                    </div>
+
+                    <!-- Historical Trends Chart -->
+                    <div class="md-card chart-card">
+                        <div class="card-header-row">
+                            <h2>Productivity vs. AI Usage Trend</h2>
+                        </div>
+                        <div class="chart-container" style="position: relative; height: 300px; width: 100%;">
+                            <canvas id="productivityChart"></canvas>
                         </div>
                     </div>
 
@@ -334,6 +345,84 @@ export class DashboardProvider {
                     } else {
                         alertsContainer.innerHTML = '<div class="empty-state">No critical alerts.</div>';
                     }
+
+                    // Render Chart if history exists
+                    if (data.history && data.history.length > 0) {
+                        renderChart(data.history);
+                    }
+                }
+
+                let productivityChart = null;
+
+                function renderChart(history) {
+                    const ctx = document.getElementById('productivityChart').getContext('2d');
+                    
+                    // Prepare data
+                    const labels = history.map(h => new Date(h.timestamp).toLocaleDateString());
+                    const netTimeData = history.map(h => h.productivity?.netTimeSaved || 0);
+                    const aiUsageData = history.map(h => h.ai?.totalSuggestions || 0);
+
+                    if (productivityChart) {
+                        productivityChart.destroy();
+                    }
+
+                    productivityChart = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: labels,
+                            datasets: [
+                                {
+                                    label: 'Net Time Saved (Hours)',
+                                    data: netTimeData,
+                                    borderColor: '#4caf50', // Green
+                                    backgroundColor: 'rgba(76, 175, 80, 0.1)',
+                                    yAxisID: 'y',
+                                    tension: 0.4,
+                                    fill: true
+                                },
+                                {
+                                    label: 'AI Suggestions',
+                                    data: aiUsageData,
+                                    borderColor: '#2196f3', // Blue
+                                    backgroundColor: 'rgba(33, 150, 243, 0.1)',
+                                    yAxisID: 'y1',
+                                    tension: 0.4,
+                                    borderDash: [5, 5]
+                                }
+                            ]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            interaction: {
+                                mode: 'index',
+                                intersect: false,
+                            },
+                            plugins: {
+                                title: {
+                                    display: true,
+                                    text: 'Does more AI = More Productivity?'
+                                }
+                            },
+                            scales: {
+                                y: {
+                                    type: 'linear',
+                                    display: true,
+                                    position: 'left',
+                                    title: { display: true, text: 'Hours Saved' }
+                                },
+                                y1: {
+                                    type: 'linear',
+                                    display: true,
+                                    position: 'right',
+                                    grid: {
+                                        drawOnChartArea: false,
+                                    },
+                                    title: { display: true, text: 'Suggestions' }
+                                }
+                            }
+                        }
+                    });
                 }
 
                 function updateMetric(id, value, trendClass) {
@@ -360,10 +449,12 @@ export class DashboardProvider {
         }
 
         const metrics = await this.storage.getLatestMetrics();
+        const history = await this.storage.getMetricsHistory(30);
         
         // Calculate derived values for display
         const dashboardData = {
             hasData: !!metrics,
+            history: history,
             roi: metrics?.roi?.overallROI ?? 0,
             perceivedROI: metrics?.productivity?.perceivedGain ?? 0,
             churn: metrics?.quality?.codeChurn?.rate ?? 0,
