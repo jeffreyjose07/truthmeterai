@@ -40,12 +40,12 @@ Our development roadmap is driven by peer-reviewed research into developer produ
 - [x] **Pattern Recognition:** "You reject 80% of suggestions in Python files. Consider disabling Copilot for Python." (v1.0.12)
 - [x] **Cost Optimization:** "Your ROI is negative this month. You might save money by switching to a different tier/tool." (v1.0.12)
 
-## Phase 5: Historical Trends & Analytics (Next)
+## Phase 5: Historical Trends & Analytics (Completed)
 **Goal:** Visualize long-term impact and correlations.
 
 - [x] **Productivity vs. Usage Trend:** Graph comparing "Net Time Saved" with "AI Suggestion Count" over time to find your "Sweet Spot". (v1.0.13)
-- [ ] **Churn History:** Track how code stability improves or degrades over weeks/months.
-- [ ] **Custom Timeframes:** View metrics for "Last 7 Days", "Last 30 Days", or "All Time".
+- [x] **Churn History:** Track how code stability improves or degrades over weeks/months. (v1.0.14)
+- [x] **Custom Timeframes:** View metrics for "Last 7 Days", "Last 30 Days", or "All Time". (v1.0.14)
 
 ## Phase 6: Team Insights (Enterprise)
 **Goal:** Help teams understand AI adoption at scale (Opt-in only).

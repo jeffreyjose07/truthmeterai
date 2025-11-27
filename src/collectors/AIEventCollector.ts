@@ -596,13 +596,37 @@ export class AIEventCollector {
         const totalSuggestions = events.filter(e => e.type === 'suggestion').length;
         const acceptedSuggestions = events.filter(e => e.acceptedLength > 0).length;
 
+        // Calculate per-language stats
+        const languageStats: Record<string, { suggestions: number, accepted: number, acceptanceRate: number }> = {};
+        
+        for (const event of events) {
+            if (event.type !== 'suggestion') { continue; }
+            
+            const lang = event.fileType || 'unknown';
+            if (!languageStats[lang]) {
+                languageStats[lang] = { suggestions: 0, accepted: 0, acceptanceRate: 0 };
+            }
+            
+            languageStats[lang].suggestions++;
+            if (event.acceptedLength > 0) {
+                languageStats[lang].accepted++;
+            }
+        }
+
+        // Calculate rates
+        for (const lang in languageStats) {
+            const stats = languageStats[lang];
+            stats.acceptanceRate = stats.suggestions > 0 ? stats.accepted / stats.suggestions : 0;
+        }
+
         return {
             totalSuggestions,
             acceptanceRate: totalSuggestions > 0 ? acceptedSuggestions / totalSuggestions : 0,
             averageModificationTime: this.calculateAverageModificationTime(events),
             churnRate: await this.calculateChurnRate(),
             sessionCount: this.getUniqueSessionCount(events),
-            totalFixTime: this.totalFixTime
+            totalFixTime: this.totalFixTime,
+            languageStats
         };
     }
 

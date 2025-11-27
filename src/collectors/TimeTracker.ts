@@ -98,6 +98,16 @@ export class TimeTracker implements vscode.Disposable {
                     this.readingTime += 1000;
                 }
 
+                // Burnout warning: > 3 hours continuous streak (Phase 3 Feature)
+                if (this.currentStreak === 10800000) { // 3 hours
+                    const config = vscode.workspace.getConfiguration('aiMetrics');
+                    if (config.get('enableBurnoutWarnings')) {
+                        vscode.window.showWarningMessage(
+                            "⚠️ Health Alert: You've been coding for 3 hours straight. Research shows error rates increase significantly after this point. Consider taking a break."
+                        );
+                    }
+                }
+
                 // Flow state detection: > 15 minutes of continuous activity
                 // (SPACE Framework - Efficiency)
                 if (!this.isFlowing && this.currentStreak >= 900000) {
