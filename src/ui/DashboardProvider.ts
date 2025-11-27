@@ -5,6 +5,7 @@ import { LocalStorage } from '../storage/LocalStorage';
 export class DashboardProvider {
     private panel: vscode.WebviewPanel | undefined;
     private onRefreshCallback?: () => Promise<void>;
+    private currentHistoryDays: number = 30; // Default history timeframe
 
     constructor(
         private context: vscode.ExtensionContext,
@@ -37,7 +38,11 @@ export class DashboardProvider {
             );
 
             this.panel.webview.html = await this.getHtmlContent();
-
+            // Set initial dropdown value in the webview
+            this.panel.webview.postMessage({
+                command: 'setInitialTimeframe',
+                days: this.currentHistoryDays
+            });
             this.panel.onDidDispose(() => {
                 this.panel = undefined;
             }, null, this.context.subscriptions);
@@ -46,10 +51,16 @@ export class DashboardProvider {
                 async message => {
                     switch (message.command) {
                         case 'refresh':
+                            // If days is explicitly sent, use it, otherwise use current
+                            this.currentHistoryDays = message.days || this.currentHistoryDays;
                             await this.refreshData();
                             break;
                         case 'export':
                             await this.exportData();
+                            break;
+                        case 'setTimeframe':
+                            this.currentHistoryDays = message.days;
+                            await this.refreshData();
                             break;
                     }
                 },
@@ -92,6 +103,11 @@ export class DashboardProvider {
                         <span class="material-icons-round">download</span>
                         Export
                     </button>
+                    <select id="timeframeSelect" class="md-select" onchange="setTimeframe(this.value)">
+                        <option value="7">Last 7 Days</option>
+                        <option value="30" selected>Last 30 Days</option>
+                        <option value="90">Last 90 Days</option>
+                    </select>
                 </div>
             </div>
 
@@ -176,6 +192,16 @@ export class DashboardProvider {
                         </div>
                     </div>
 
+                    <!-- Churn History Chart -->
+                    <div class="md-card chart-card">
+                        <div class="card-header-row">
+                            <h2>Code Churn Trend</h2>
+                        </div>
+                        <div class="chart-container" style="position: relative; height: 300px; width: 100%;">
+                            <canvas id="churnChart"></canvas>
+                        </div>
+                    </div>
+
                     <div class="grid-row">
                         <!-- Main Insight Card -->
                         <div class="md-card large-card">
@@ -247,11 +273,17 @@ export class DashboardProvider {
 
             <script>
                 const vscode = acquireVsCodeApi();
+                let currentDays = 30; // Default timeframe
+
+                function setTimeframe(days) {
+                    currentDays = parseInt(days, 10);
+                    refreshData(); // Refresh with new timeframe
+                }
                 
                 function refreshData() {
                     document.getElementById('loadingState').style.display = 'flex';
                     document.getElementById('dashboardContent').style.display = 'none';
-                    vscode.postMessage({ command: 'refresh' });
+                    vscode.postMessage({ command: 'refresh', days: currentDays });
                 }
 
                 function exportReport() {
@@ -274,6 +306,8 @@ export class DashboardProvider {
                     const message = event.data;
                     if (message.command === 'updateData') {
                         updateDashboard(message.data);
+                    } else if (message.command === 'setInitialTimeframe') {
+                        document.getElementById('timeframeSelect').value = message.days;
                     }
                 });
 
@@ -349,10 +383,12 @@ export class DashboardProvider {
                     // Render Chart if history exists
                     if (data.history && data.history.length > 0) {
                         renderChart(data.history);
+                        renderChurnChart(data.history);
                     }
                 }
 
                 let productivityChart = null;
+                let churnChart = null;
 
                 function renderChart(history) {
                     const ctx = document.getElementById('productivityChart').getContext('2d');
@@ -425,6 +461,76 @@ export class DashboardProvider {
                     });
                 }
 
+                function renderChurnChart(history) {
+                    const ctx = document.getElementById('churnChart').getContext('2d');
+
+                    const labels = history.map(h => new Date(h.timestamp).toLocaleDateString());
+                    const churnRateData = history.map(h => (h.quality?.codeChurn?.rate || 0) * 100); // %
+                    const aiVsHumanChurnData = history.map(h => h.quality?.codeChurn?.aiVsHuman || 0); // Ratio
+
+                    if (churnChart) {
+                        churnChart.destroy();
+                    }
+
+                    churnChart = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: labels,
+                            datasets: [
+                                {
+                                    label: 'Overall Churn Rate (%)',
+                                    data: churnRateData,
+                                    borderColor: '#ff9800', // Orange
+                                    backgroundColor: 'rgba(255, 152, 0, 0.1)',
+                                    yAxisID: 'y',
+                                    tension: 0.4,
+                                    fill: true
+                                },
+                                {
+                                    label: 'AI vs. Human Churn Ratio',
+                                    data: aiVsHumanChurnData,
+                                    borderColor: '#f44336', // Red
+                                    backgroundColor: 'rgba(244, 67, 54, 0.1)',
+                                    yAxisID: 'y1',
+                                    tension: 0.4,
+                                    borderDash: [5, 5]
+                                }
+                            ]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            interaction: {
+                                mode: 'index',
+                                intersect: false,
+                            },
+                            plugins: {
+                                title: {
+                                    display: true,
+                                    text: 'Code Churn History (Higher is Worse)'
+                                }
+                            },
+                            scales: {
+                                y: {
+                                    type: 'linear',
+                                    display: true,
+                                    position: 'left',
+                                    title: { display: true, text: 'Churn Rate (%)' }
+                                },
+                                y1: {
+                                    type: 'linear',
+                                    display: true,
+                                    position: 'right',
+                                    grid: {
+                                        drawOnChartArea: false,
+                                    },
+                                    title: { display: true, text: 'AI vs. Human Ratio' }
+                                }
+                            }
+                        }
+                    });
+                }
+
                 function updateMetric(id, value, trendClass) {
                     const el = document.getElementById(id + 'Value');
                     el.textContent = value;
@@ -449,7 +555,7 @@ export class DashboardProvider {
         }
 
         const metrics = await this.storage.getLatestMetrics();
-        const history = await this.storage.getMetricsHistory(30);
+        const history = await this.storage.getMetricsHistory(this.currentHistoryDays);
         
         // Calculate derived values for display
         const dashboardData = {

@@ -43,7 +43,7 @@ Our development roadmap is driven by peer-reviewed research into developer produ
 ## Phase 5: Historical Trends & Analytics (Next)
 **Goal:** Visualize long-term impact and correlations.
 
-- [ ] **Productivity vs. Usage Trend:** Graph comparing "Net Time Saved" with "AI Suggestion Count" over time to find your "Sweet Spot".
+- [x] **Productivity vs. Usage Trend:** Graph comparing "Net Time Saved" with "AI Suggestion Count" over time to find your "Sweet Spot". (v1.0.13)
 - [ ] **Churn History:** Track how code stability improves or degrades over weeks/months.
 - [ ] **Custom Timeframes:** View metrics for "Last 7 Days", "Last 30 Days", or "All Time".
 
