@@ -4,14 +4,14 @@ import { CodeQualityMetrics } from '../types/metrics';
 export class CodeQualityAnalyzer {
     private previousAnalysis: Map<string, any> = new Map();
 
-    async analyze(gitMetrics?: any): Promise<CodeQualityMetrics> {
+    async analyze(gitMetrics?: any, aiMetrics?: any): Promise<CodeQualityMetrics> {
         const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
         if (!workspaceFolder) {
             return this.getDefaultMetrics();
         }
 
         const analysis: CodeQualityMetrics = {
-            codeChurn: await this.analyzeCodeChurn(gitMetrics),
+            codeChurn: await this.analyzeCodeChurn(gitMetrics, aiMetrics),
             duplication: await this.analyzeDuplication(),
             complexity: await this.analyzeComplexity(),
             refactoring: await this.analyzeRefactoring(),
@@ -23,14 +23,14 @@ export class CodeQualityAnalyzer {
         return analysis;
     }
 
-    private async analyzeCodeChurn(gitMetrics?: any): Promise<any> {
+    private async analyzeCodeChurn(gitMetrics?: any, aiMetrics?: any): Promise<any> {
         // Use Git metrics if available (more accurate)
         if (gitMetrics && typeof gitMetrics.churnRate === 'number') {
             const rate = gitMetrics.churnRate;
             return {
                 rate,
                 trend: this.calculateTrend('churn', rate),
-                aiVsHuman: await this.compareAIvsHumanChurn()
+                aiVsHuman: await this.compareAIvsHumanChurn(gitMetrics, aiMetrics)
             };
         }
 
@@ -50,7 +50,7 @@ export class CodeQualityAnalyzer {
         return {
             rate,
             trend: this.calculateTrend('churn', rate),
-            aiVsHuman: await this.compareAIvsHumanChurn()
+            aiVsHuman: await this.compareAIvsHumanChurn(gitMetrics, aiMetrics)
         };
     }
 
@@ -166,8 +166,17 @@ export class CodeQualityAnalyzer {
         return change > 0 ? 'increasing' : 'decreasing';
     }
 
-    private async compareAIvsHumanChurn(): Promise<number> {
-        return 1.5;
+    private async compareAIvsHumanChurn(gitMetrics?: any, aiMetrics?: any): Promise<number> {
+        const aiChurn = aiMetrics?.churnRate || 0;
+        const repoChurn = gitMetrics?.churnRate || 0;
+
+        // If we have both metrics, calculate the ratio
+        if (aiChurn > 0 && repoChurn > 0) {
+            return aiChurn / repoChurn;
+        }
+
+        // Fallback to 1.0 (neutral) if we don't have enough data
+        return 1.0;
     }
 
     private extractCodeBlocks(text: string): string[] {

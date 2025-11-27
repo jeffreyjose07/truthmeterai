@@ -314,7 +314,7 @@ async function calculateAndStoreMetrics(context: vscode.ExtensionContext): Promi
         // 2. Run analysis using the raw data
         // Note: Git analysis is skipped here for speed as it can be slow
         
-        const qualityMetrics = await analyzers.qualityAnalyzer!.analyze();
+        const qualityMetrics = await analyzers.qualityAnalyzer!.analyze(undefined, aiMetrics);
         const productivityMetrics = await analyzers.productivityAnalyzer!.analyze(aiMetrics, codeMetrics, timeMetrics);
         
         // Pass productivity metrics to ROI calculator
@@ -373,7 +373,7 @@ async function collectAllMetrics(
     }
 
     // Heavy analysis (allow cancellation between steps)
-    const quality = await analyzers.qualityAnalyzer!.analyze(git);
+    const quality = await analyzers.qualityAnalyzer!.analyze(git, ai);
     await yieldToEventLoop();
 
     if (token.isCancellationRequested) {
