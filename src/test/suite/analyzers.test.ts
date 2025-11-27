@@ -1,6 +1,5 @@
 import * as assert from 'assert';
 import { CodeQualityAnalyzer } from '../../analyzers/CodeQualityAnalyzer';
-import { ProductivityAnalyzer } from '../../analyzers/ProductivityAnalyzer';
 
 suite('CodeQualityAnalyzer Test Suite', () => {
     let analyzer: CodeQualityAnalyzer;
@@ -99,11 +98,16 @@ suite('CodeQualityAnalyzer Test Suite', () => {
     });
 });
 
+import { ProductivityAnalyzer } from '../../analyzers/ProductivityAnalyzer';
+import { MockLocalStorage } from '../mocks/mockLocalStorage'; // Import MockLocalStorage
+
 suite('ProductivityAnalyzer Test Suite', () => {
     let analyzer: ProductivityAnalyzer;
+    let mockStorage: MockLocalStorage;
 
     setup(() => {
-        analyzer = new ProductivityAnalyzer();
+        mockStorage = new MockLocalStorage();
+        analyzer = new ProductivityAnalyzer(mockStorage as any); // Pass mockStorage as any
     });
 
     test('should analyze productivity metrics', async () => {

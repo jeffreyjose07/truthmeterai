@@ -117,6 +117,32 @@ export async function activate(context: vscode.ExtensionContext) {
                 analysisToken.dispose();
                 analysisToken = undefined;
             }
+        }),
+
+        vscode.commands.registerCommand('aiMetrics.promptSatisfactionSurvey', async () => {
+            const options = [
+                { label: '😊 Great', description: '5 - Very Satisfied' },
+                { label: '🙂 Good', description: '4 - Satisfied' },
+                { label: '😐 Neutral', description: '3 - Neither Satisfied nor Dissatisfied' },
+                { label: '🙁 Bad', description: '2 - Dissatisfied' },
+                { label: '😞 Terrible', description: '1 - Very Dissatisfied' },
+            ];
+            const selection = await vscode.window.showQuickPick(options, {
+                placeHolder: 'How was your recent coding session experience with AI?',
+                canPickMany: false
+            });
+
+            if (selection) {
+                const stor = await getStorage(context);
+                const rating = parseInt(selection.description.split(' ')[0], 10);
+                stor.store('satisfaction_feedback', {
+                    timestamp: Date.now(),
+                    rating: rating,
+                    label: selection.label
+                });
+                logger.info(`User satisfaction recorded: ${rating}`);
+                vscode.window.showInformationMessage(`Thank you for your feedback: ${selection.label}`);
+            }
         })
     );
 
@@ -183,14 +209,15 @@ async function getGitAnalyzer(): Promise<GitAnalyzer> {
     return gitAnalyzer;
 }
 
-async function getAnalyzers() {
+async function getAnalyzers(context: vscode.ExtensionContext) {
     if (!qualityAnalyzer) {
+        const stor = await getStorage(context); // Get storage instance
         const { CodeQualityAnalyzer } = await import('./analyzers/CodeQualityAnalyzer');
         const { ProductivityAnalyzer } = await import('./analyzers/ProductivityAnalyzer');
         const { ROICalculator } = await import('./calculators/ROICalculator');
 
         qualityAnalyzer = new CodeQualityAnalyzer();
-        productivityAnalyzer = new ProductivityAnalyzer();
+        productivityAnalyzer = new ProductivityAnalyzer(stor); // Pass storage to ProductivityAnalyzer
         roiCalculator = new ROICalculator();
 
         logger.info('Analyzers created');
@@ -300,7 +327,7 @@ async function calculateAndStoreMetrics(context: vscode.ExtensionContext): Promi
     try {
         const stor = await getStorage(context);
         const collectors = await getCollectors(context);
-        const analyzers = await getAnalyzers();
+        const analyzers = await getAnalyzers(context); // Pass context here
 
         // 1. Collect raw data from collectors
         const [aiMetrics, codeMetrics, timeMetrics] = await Promise.all([
@@ -352,7 +379,7 @@ async function collectAllMetrics(
     }
 
     const collectors = await getCollectors(context);
-    const analyzers = await getAnalyzers();
+    const analyzers = await getAnalyzers(context); // Pass context here
 
     // Collect basic metrics (fast)
     const [ai, code, time] = await Promise.all([

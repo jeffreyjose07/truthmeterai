@@ -57,7 +57,7 @@ suite('Integration Test Suite', () => {
 
         // Analyze metrics
         const qualityAnalyzer = new CodeQualityAnalyzer();
-        const productivityAnalyzer = new ProductivityAnalyzer();
+        const productivityAnalyzer = new ProductivityAnalyzer(storage as any); // Pass storage as any
         const roiCalculator = new ROICalculator();
 
         const analysis = {
@@ -265,7 +265,7 @@ suite('Integration Test Suite', () => {
         await qualityAnalyzer.analyze();
 
         // Analyze productivity
-        const productivityAnalyzer = new ProductivityAnalyzer();
+        const productivityAnalyzer = new ProductivityAnalyzer(storage as any); // Pass storage as any
         await productivityAnalyzer.analyze();
 
         // Calculate ROI
@@ -334,7 +334,8 @@ suite('Integration Test Suite', () => {
                 },
                 actualGain: aiMetrics.acceptanceRate * 0.26,
                 perceivedGain: aiMetrics.acceptanceRate * 1.83,
-                netTimeSaved: aiMetrics.totalSuggestions * 0.5
+                netTimeSaved: aiMetrics.totalSuggestions * 0.5,
+                satisfaction: { average: 3.5 } // Added mock satisfaction
             },
             roi: {
                 costBenefit: {

@@ -2,16 +2,18 @@
 
 **Built with Science, Not Hype**
 
-[![Version](https://img.shields.io/badge/version-1.0.8-blue.svg)](https://github.com/jeffreyjose07/truthmeterai)
+[![Version](https://img.shields.io/badge/version-1.0.9-blue.svg)](https://github.com/jeffreyjose07/truthmeterai)
 [![License](https://img.shields.io/badge/license-AGPL--3.0-green.svg)](LICENSE)
 [![Tests](https://img.shields.io/badge/tests-140%20passing-brightgreen.svg)](#testing-and-quality-assurance)
 
 Measure the **ACTUAL** impact of AI coding assistants on developer productivity based on peer-reviewed research, not vanity metrics.
 
-> **New in v1.0.8:**
+> **New in v1.0.9:**
+> - **Satisfaction Survey:** Collects optional micro-feedback on your coding session experience (SPACE Framework 'S').
 > - **AI vs. Human Churn:** Directly compares the volatility of AI-generated code against your repository's baseline.
 > - **Fix Time Analysis:** Measures the actual time spent editing code *immediately after* accepting an AI suggestion.
 > - **Context Switch Tracking:** Real-time detection of file switching and focus loss.
+> - **Flow State Tracking:** Measures deep work sessions (>15m continuous coding).
 
 ---
 

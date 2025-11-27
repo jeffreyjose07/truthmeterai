@@ -49,6 +49,9 @@ export interface TrueProductivityMetrics {
   actualGain?: number;
   perceivedGain?: number;
   netTimeSaved?: number;
+  satisfaction?: {
+    average: number;
+  };
 }
 
 export interface DeveloperExperienceMetrics {

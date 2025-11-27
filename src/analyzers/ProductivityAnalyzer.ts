@@ -1,12 +1,16 @@
 import { TrueProductivityMetrics } from '../types/metrics';
+import { LocalStorage } from '../storage/LocalStorage'; // Import LocalStorage
 
 export class ProductivityAnalyzer {
+    constructor(private storage: LocalStorage) {} // Inject LocalStorage
+
     async analyze(aiMetrics?: any, codeMetrics?: any, timeMetrics?: any): Promise<TrueProductivityMetrics> {
         // Default values if no metrics provided
         const acceptanceRate = aiMetrics?.acceptanceRate || 0;
         const totalSuggestions = aiMetrics?.totalSuggestions || 0;
         const activeTimeHours = (timeMetrics?.totalActiveTime || 0) / 60;
         const flowEfficiency = timeMetrics?.flowEfficiency || 0;
+        const averageSatisfaction = await this.calculateAverageSatisfaction();
         
         // Calculate velocity change based on AI acceptance rate
         // Research suggests 0-26% actual gain, highly correlated with acceptance
@@ -50,10 +54,22 @@ export class ProductivityAnalyzer {
                 customerImpact: 0
             },
 
-            actualGain: velocityChange,
-            perceivedGain: acceptanceRate * 1.5, // Perceived gain is usually much higher
-            netTimeSaved: netTimeSaved
+            netTimeSaved: netTimeSaved,
+            actualGain: velocityChange, // Define actualGain
+            perceivedGain: acceptanceRate * 1.5, // Define perceivedGain
+            satisfaction: {
+                average: averageSatisfaction
+            }
         };
+    }
+
+    private async calculateAverageSatisfaction(): Promise<number> {
+        const feedback = await this.storage.get('satisfaction_feedback') || [];
+        if (feedback.length === 0) {
+            return 0; // No feedback yet
+        }
+        const totalRating = feedback.reduce((sum: number, entry: any) => sum + (entry.rating || 0), 0);
+        return totalRating / feedback.length;
     }
 
     async calculateActualProductivity(): Promise<number> {
