@@ -2,16 +2,16 @@
 
 **Built with Science, Not Hype**
 
-[![Version](https://img.shields.io/badge/version-1.0.10-blue.svg)](https://github.com/jeffreyjose07/truthmeterai)
+[![Version](https://img.shields.io/badge/version-1.0.12-blue.svg)](https://github.com/jeffreyjose07/truthmeterai)
 [![License](https://img.shields.io/badge/license-AGPL--3.0-green.svg)](LICENSE)
 [![Tests](https://img.shields.io/badge/tests-140%20passing-brightgreen.svg)](#testing-and-quality-assurance)
 
 Measure the **ACTUAL** impact of AI coding assistants on developer productivity based on peer-reviewed research, not vanity metrics.
 
-> **New in v1.0.10:**
-> - **Activity Refinement:** Distinguishes between "Active Typing" and "Reading/Thinking" time to better understand how you interact with code (SPACE Framework 'A').
-> - **Enhanced Methodology:** Updated dashboard and docs with detailed explanations of the "Guesswork Hypothesis" and "Net Time" calculations.
-> - **Satisfaction Survey:** Collects optional micro-feedback on your coding session experience.
+> **New in v1.0.12:**
+> - **Pattern Recognition:** Detects when you consistently reject suggestions in specific languages (e.g., "You reject 80% of Python suggestions").
+> - **Cost Optimization:** Alerts you if your AI ROI turns negative, helping you save money on unproductive tools.
+> - **Burnout Warnings:** Proactive health alerts for long coding sessions.
 
 ---
 

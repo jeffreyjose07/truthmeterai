@@ -388,9 +388,37 @@ export class DashboardProvider {
         if ((metrics.productivity?.netTimeSaved || 0) < 0) {
             recs.push({ icon: 'timer_off', title: 'Time Loss', text: 'More time spent fixing than saving.' });
         }
+
+        // Cost Optimization (Phase 3)
+        if ((metrics.roi?.overallROI || 0) < 0) {
+            recs.push({
+                icon: 'savings',
+                title: 'Cost Alert',
+                text: 'Your AI ROI is negative. You are spending more on the license + fix time than you are saving.'
+            });
+        }
+
         if (recs.length === 0) {
             recs.push({ icon: 'check_circle', title: 'All Good', text: 'Metrics are within healthy ranges.' });
         }
+
+        // Pattern Recognition (Phase 3)
+        const languageStats = metrics.ai?.languageStats;
+        if (languageStats) {
+            for (const lang in languageStats) {
+                const stats = languageStats[lang];
+                // If significant usage (>5 suggestions) and low acceptance (<15%)
+                if (stats.suggestions > 5 && stats.acceptanceRate < 0.15) {
+                    const rejectionRate = ((1 - stats.acceptanceRate) * 100).toFixed(0);
+                    recs.push({
+                        icon: 'psychology',
+                        title: 'Pattern Detected',
+                        text: `You reject ${rejectionRate}% of suggestions in ${lang} files. Consider disabling AI for this language to reduce noise.`
+                    });
+                }
+            }
+        }
+
         return recs;
     }
 

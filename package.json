@@ -2,7 +2,7 @@
   "name": "truthmeter-ai",
   "displayName": "TruthMeter AI - Coding Assistant Metrics",
   "description": "Measure ACTUAL AI coding assistant ROI (Copilot, Cascade, Cursor, Cody, etc.) with research-backed metrics",
-  "version": "1.0.10",
+  "version": "1.0.12",
   "publisher": "JeffreyJose",
   "author": {
     "name": "Jeffrey Jose"
@@ -89,6 +89,11 @@
           "type": "number",
           "default": 600000,
           "description": "Full analysis interval in milliseconds"
+        },
+        "aiMetrics.enableBurnoutWarnings": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable health warnings for prolonged coding sessions (>3 hours)"
         }
       }
     }
