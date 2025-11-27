@@ -2,16 +2,16 @@
 
 **Built with Science, Not Hype**
 
-[![Version](https://img.shields.io/badge/version-1.0.6-blue.svg)](https://github.com/jeffreyjose07/truthmeterai)
+[![Version](https://img.shields.io/badge/version-1.0.7-blue.svg)](https://github.com/jeffreyjose07/truthmeterai)
 [![License](https://img.shields.io/badge/license-AGPL--3.0-green.svg)](LICENSE)
 [![Tests](https://img.shields.io/badge/tests-140%20passing-brightgreen.svg)](#testing-and-quality-assurance)
 
 Measure the **ACTUAL** impact of AI coding assistants on developer productivity based on peer-reviewed research, not vanity metrics.
 
-> **New in v1.0.6:**
-> - **Context Switch Tracking:** Real-time detection of file switching and focus loss to measure "Inner Loop" efficiency.
-> - **Improved Flow Analysis:** Correlates flow state with context switching frequency.
-> - **Bug Fixes:** Fixed missing URI tracking in AI events.
+> **New in v1.0.7:**
+> - **Fix Time Analysis:** Measures the actual time spent editing code *immediately after* accepting an AI suggestion.
+> - **Context Switch Tracking:** Real-time detection of file switching and focus loss.
+> - **Enhanced Accuracy:** Replaces heuristic "rework time" with measured data.
 
 ---
 

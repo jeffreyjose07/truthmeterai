@@ -40,6 +40,10 @@ export class AIEventCollector {
     // Document cache (OPTIMIZATION 5)
     private documentMetrics: WeakMap<vscode.TextDocument, any> = new WeakMap();
 
+    // Fix Time Tracking
+    private lastAISuggestion: Map<string, number> = new Map();
+    private totalFixTime: number = 0;
+
     // Throttling
     private lastStatusUpdate: number = 0;
     private lastChangeTime: number = 0;
@@ -144,6 +148,8 @@ export class AIEventCollector {
         this.lastChangeTime = now; // Keep global for backward compatibility
 
         if (this.isAIGenerated(event)) {
+            this.lastAISuggestion.set(uri, now); // Track time of AI suggestion
+
             const aiEvent: AIEvent = {
                 timestamp: now,
                 type: 'suggestion',
@@ -160,6 +166,17 @@ export class AIEventCollector {
             this.lastSuggestion = aiEvent;
 
             this.trackModifications(event.document.uri.toString(), aiEvent);
+        } else {
+            // Human edit - check if it's a "fix" for recent AI code
+            const lastAITime = this.lastAISuggestion.get(uri);
+            // If AI suggested something in this file within the last 5 minutes
+            if (lastAITime && (now - lastAITime < 300000)) {
+                // Calculate time spent editing (delta since last change, capped at 5s to exclude idle time)
+                const timeDelta = Math.min(now - lastChange, 5000);
+                if (timeDelta > 0) {
+                    this.totalFixTime += timeDelta;
+                }
+            }
         }
     }
 
@@ -584,7 +601,8 @@ export class AIEventCollector {
             acceptanceRate: totalSuggestions > 0 ? acceptedSuggestions / totalSuggestions : 0,
             averageModificationTime: this.calculateAverageModificationTime(events),
             churnRate: await this.calculateChurnRate(),
-            sessionCount: this.getUniqueSessionCount(events)
+            sessionCount: this.getUniqueSessionCount(events),
+            totalFixTime: this.totalFixTime
         };
     }
 

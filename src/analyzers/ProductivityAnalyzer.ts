@@ -18,9 +18,16 @@ export class ProductivityAnalyzer {
         // Calculate time saved: avg 5 mins saved per accepted suggestion
         const timeSavedHours = (totalSuggestions * acceptanceRate) * (5 / 60);
         
-        // Calculate time lost: review time (2 min) + fix time (variable based on rework)
+        // Calculate time lost: review time (2 min) + real fix time (measured)
         const reviewTimeHours = totalSuggestions * (2 / 60);
-        const fixTimeHours = (totalSuggestions * acceptanceRate * reworkRate) * (15 / 60);
+        
+        // Use actual measured fix time if available, otherwise fallback to heuristic
+        let fixTimeHours = 0;
+        if (aiMetrics?.totalFixTime) {
+            fixTimeHours = aiMetrics.totalFixTime / 1000 / 60 / 60; // ms -> hours
+        } else {
+            fixTimeHours = (totalSuggestions * acceptanceRate * reworkRate) * (15 / 60);
+        }
         
         const netTimeSaved = timeSavedHours - (reviewTimeHours + fixTimeHours);
 
