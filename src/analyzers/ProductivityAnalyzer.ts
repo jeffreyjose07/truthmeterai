@@ -44,6 +44,8 @@ export class ProductivityAnalyzer {
 
             flowEfficiency: {
                 focusTime: (timeMetrics?.flowTime || 0) / 60, // Flow time in hours
+                activeCodingTime: (timeMetrics?.typingTime || 0) / 60, // Typing time in hours
+                readingTime: (timeMetrics?.readingTime || 0) / 60, // Reading time in hours
                 contextSwitches: timeMetrics?.contextSwitches || 0,
                 waitTime: 0
             },

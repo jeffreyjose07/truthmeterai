@@ -4,10 +4,13 @@ import { LocalStorage } from '../storage/LocalStorage';
 export class TimeTracker implements vscode.Disposable {
     private activeTime: number = 0;
     private flowTime: number = 0; // Time spent in "flow" state (current session)
+    private typingTime: number = 0; // Time spent actively typing
+    private readingTime: number = 0; // Time spent reading/reviewing (active but not typing)
     private currentStreak: number = 0; // Continuous active time
     private isFlowing: boolean = false; // Are we currently in flow?
     private contextSwitches: number = 0; // Track file switching
     private lastActivity: number = Date.now();
+    private lastKeystrokeTime: number = 0; // Last time user typed
     private isActive: boolean = false;
     private intervalId: NodeJS.Timeout | null = null;
     private disposables: vscode.Disposable[] = [];
@@ -19,14 +22,14 @@ export class TimeTracker implements vscode.Disposable {
         this.disposables.push(
             vscode.window.onDidChangeActiveTextEditor(() => {
                 this.contextSwitches++;
-                this.recordActivity();
+                this.recordActivity('focus');
             }),
             vscode.workspace.onDidChangeTextDocument(() => {
-                this.recordActivity();
+                this.recordActivity('typing');
             }),
             vscode.window.onDidChangeWindowState((state) => {
                 if (state.focused) {
-                    this.recordActivity();
+                    this.recordActivity('focus');
                 } else {
                     this.recordInactivity();
                 }
@@ -39,7 +42,7 @@ export class TimeTracker implements vscode.Disposable {
         }, 1000);
     }
 
-    private recordActivity() {
+    private recordActivity(type: 'typing' | 'focus' = 'focus') {
         const now = Date.now();
         const timeSinceLastActivity = now - this.lastActivity;
 
@@ -50,13 +53,21 @@ export class TimeTracker implements vscode.Disposable {
                 end: now,
                 duration: this.activeTime,
                 flowDuration: this.flowTime,
+                typingDuration: this.typingTime,
+                readingDuration: this.readingTime,
                 contextSwitches: this.contextSwitches
             });
             this.activeTime = 0;
             this.flowTime = 0;
+            this.typingTime = 0;
+            this.readingTime = 0;
             this.currentStreak = 0;
             this.isFlowing = false;
             this.contextSwitches = 0;
+        }
+
+        if (type === 'typing') {
+            this.lastKeystrokeTime = now;
         }
 
         this.isActive = true;
@@ -77,6 +88,15 @@ export class TimeTracker implements vscode.Disposable {
             if (timeSinceLastActivity < 60000) {
                 this.activeTime += 1000;
                 this.currentStreak += 1000;
+
+                // Distinguish Typing vs Reading
+                // If last keystroke was < 5 seconds ago, consider it "Typing"
+                // Otherwise, if active, consider it "Reading/Thinking"
+                if (now - this.lastKeystrokeTime < 5000) {
+                    this.typingTime += 1000;
+                } else {
+                    this.readingTime += 1000;
+                }
 
                 // Flow state detection: > 15 minutes of continuous activity
                 // (SPACE Framework - Efficiency)
@@ -103,16 +123,22 @@ export class TimeTracker implements vscode.Disposable {
 
         const totalTime = sessions.reduce((sum: number, s: any) => sum + (s.duration || 0), 0);
         const totalFlow = sessions.reduce((sum: number, s: any) => sum + (s.flowDuration || 0), 0);
+        const totalTyping = sessions.reduce((sum: number, s: any) => sum + (s.typingDuration || 0), 0);
+        const totalReading = sessions.reduce((sum: number, s: any) => sum + (s.readingDuration || 0), 0);
         const totalSwitches = sessions.reduce((sum: number, s: any) => sum + (s.contextSwitches || 0), 0);
         const totalSessions = sessions.length;
 
         const currentTotalTime = totalTime + this.activeTime;
         const currentTotalFlow = totalFlow + this.flowTime;
+        const currentTotalTyping = totalTyping + this.typingTime;
+        const currentTotalReading = totalReading + this.readingTime;
         const currentTotalSwitches = totalSwitches + this.contextSwitches;
 
         return {
             totalActiveTime: currentTotalTime / 1000 / 60, // minutes
             flowTime: currentTotalFlow / 1000 / 60, // minutes
+            typingTime: currentTotalTyping / 1000 / 60, // minutes
+            readingTime: currentTotalReading / 1000 / 60, // minutes
             flowEfficiency: currentTotalTime > 0 ? currentTotalFlow / currentTotalTime : 0,
             contextSwitches: currentTotalSwitches,
             currentSessionTime: this.activeTime / 1000 / 60, // minutes

@@ -36,6 +36,8 @@ export interface TrueProductivityMetrics {
 
   flowEfficiency: {
     focusTime: number;
+    activeCodingTime?: number;
+    readingTime?: number;
     contextSwitches: number;
     waitTime: number;
   };

@@ -2,18 +2,16 @@
 
 **Built with Science, Not Hype**
 
-[![Version](https://img.shields.io/badge/version-1.0.9-blue.svg)](https://github.com/jeffreyjose07/truthmeterai)
+[![Version](https://img.shields.io/badge/version-1.0.10-blue.svg)](https://github.com/jeffreyjose07/truthmeterai)
 [![License](https://img.shields.io/badge/license-AGPL--3.0-green.svg)](LICENSE)
 [![Tests](https://img.shields.io/badge/tests-140%20passing-brightgreen.svg)](#testing-and-quality-assurance)
 
 Measure the **ACTUAL** impact of AI coding assistants on developer productivity based on peer-reviewed research, not vanity metrics.
 
-> **New in v1.0.9:**
-> - **Satisfaction Survey:** Collects optional micro-feedback on your coding session experience (SPACE Framework 'S').
-> - **AI vs. Human Churn:** Directly compares the volatility of AI-generated code against your repository's baseline.
-> - **Fix Time Analysis:** Measures the actual time spent editing code *immediately after* accepting an AI suggestion.
-> - **Context Switch Tracking:** Real-time detection of file switching and focus loss.
-> - **Flow State Tracking:** Measures deep work sessions (>15m continuous coding).
+> **New in v1.0.10:**
+> - **Activity Refinement:** Distinguishes between "Active Typing" and "Reading/Thinking" time to better understand how you interact with code (SPACE Framework 'A').
+> - **Enhanced Methodology:** Updated dashboard and docs with detailed explanations of the "Guesswork Hypothesis" and "Net Time" calculations.
+> - **Satisfaction Survey:** Collects optional micro-feedback on your coding session experience.
 
 ---
 
@@ -1073,6 +1071,21 @@ We combine multiple research-backed frameworks:
 - Duplication detection with AI pattern matching
 - Net time impact (time saved - time wasted)
 - Hidden cost accounting (technical debt, maintenance)
+
+### Metrics Explained
+
+**1. Code Churn & The "Guesswork Hypothesis"**
+Traditional churn measures any code change. We measure *rapid reversal*. If AI-generated code is deleted or significantly rewritten within 14 days, it often indicates the AI was "guessing"—providing a plausible-looking but incorrect solution that wasted the developer's time verifying and fixing. High churn = Low Trust.
+
+**2. Flow Efficiency & Context Switching**
+Developer productivity is deeply linked to "Flow State". AI tools should keep you in the editor. Frequent context switching (checking docs, switching files rapidly) often signals confusion or tool failure. We measure:
+- **Flow State:** Continuous coding activity >15 minutes.
+- **Context Switches:** Frequency of active file changes. High switching + Low Flow = High Cognitive Load.
+
+**3. Net Time Impact (The ROI Equation)**
+Most tools only track "time saved writing". We subtract the "hidden tax":
+`Net Time = (Time Saved Writing) - (Fix Time + Review Time + Context Switch Overhead)`
+If this is negative, the AI is costing you speed, even if it feels faster.
 
 ### Research Citations
 

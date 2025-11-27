@@ -217,13 +217,16 @@ export class DashboardProvider {
                         <div class="card-content-hidden" id="methodologyContent">
                             <div class="methodology-grid">
                                 <div class="method-item">
-                                    <strong>Productivity:</strong> Measured by velocity change adjusted for rework rate (GitClear 2024).
+                                    <strong>The "Guesswork" Hypothesis (Churn):</strong>
+                                    <p>High churn (>30%) on AI code often means the AI is "guessing"—providing plausible but wrong solutions you have to fix later. This wastes more time than writing it yourself.</p>
                                 </div>
                                 <div class="method-item">
-                                    <strong>Net Time:</strong> (Suggestions × Avg Save) - (Review Time + Fix Time).
+                                    <strong>Net Time Impact (True ROI):</strong>
+                                    <p>We calculate: <em>(Time Saved Writing) - (Review Time + Fix Time + Context Switch Cost)</em>. If negative, the AI is a net drag on speed.</p>
                                 </div>
                                 <div class="method-item">
-                                    <strong>Churn:</strong> % of AI-generated lines modified/deleted within 14 days.
+                                    <strong>Flow Efficiency:</strong>
+                                    <p>Productivity isn't just lines of code. It's uninterrupted "Deep Work". We track how often AI suggestions break your flow vs. keeping you in the zone.</p>
                                 </div>
                             </div>
                         </div>
