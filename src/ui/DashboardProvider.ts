@@ -242,6 +242,29 @@ export class DashboardProvider {
                         </div>
                     </div>
 
+                    <!-- Performance (SPACE) Metrics -->
+                    <div class="md-card large-card" style="margin-top: 1rem;">
+                        <div class="card-header-row">
+                            <h2>Performance (SPACE)</h2>
+                            <span class="material-icons-round icon" title="Correlates AI usage with Build/Test outcomes">science</span>
+                        </div>
+                        <div class="card-content-row">
+                            <div class="metric-group">
+                                <label>Build Success Rate</label>
+                                <span class="metric-text" id="buildSuccess">--%</span>
+                            </div>
+                            <div class="metric-group">
+                                <label>Test Success Rate</label>
+                                <span class="metric-text" id="testSuccess">--%</span>
+                            </div>
+                            <div class="metric-group">
+                                <label>AI Impact Correlation</label>
+                                <div class="chip" id="aiCorrelation">--</div>
+                                <small id="aiCorrelationDesc" style="display:block; margin-top:4px; color:var(--text-secondary)">--</small>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Methodology Section (Collapsible) -->
                     <div class="md-card collapsible-card">
                         <div class="card-header-row" onclick="toggleMethodology()">
@@ -385,6 +408,38 @@ export class DashboardProvider {
                         renderChart(data.history);
                         renderChurnChart(data.history);
                     }
+
+                    // Update Performance Metrics
+                    if (data.performance) {
+                        const buildSuccess = (data.performance.buildStats.successRate * 100).toFixed(0);
+                        const testSuccess = (data.performance.testStats.successRate * 100).toFixed(0);
+                        
+                        updateMetricText('buildSuccess', buildSuccess + '%');
+                        updateMetricText('testSuccess', testSuccess + '%');
+
+                        const correlation = data.performance.buildStats.aiCorrelation;
+                        const correlationEl = document.getElementById('aiCorrelation');
+                        const correlationDesc = document.getElementById('aiCorrelationDesc');
+
+                        if (correlation > 0.3) {
+                            correlationEl.textContent = "Positive";
+                            correlationEl.className = "chip success";
+                            correlationDesc.textContent = "AI usage linked to better builds";
+                        } else if (correlation < -0.3) {
+                            correlationEl.textContent = "Negative";
+                            correlationEl.className = "chip danger";
+                            correlationDesc.textContent = "AI usage linked to failures";
+                        } else {
+                            correlationEl.textContent = "Neutral";
+                            correlationEl.className = "chip";
+                            correlationDesc.textContent = "No significant correlation";
+                        }
+                    }
+                }
+
+                function updateMetricText(id, text) {
+                    const el = document.getElementById(id);
+                    if (el) el.textContent = text;
                 }
 
                 let productivityChart = null;
@@ -566,6 +621,7 @@ export class DashboardProvider {
             churn: metrics?.quality?.codeChurn?.rate ?? 0,
             duplication: metrics?.quality?.duplication?.cloneRate ?? 0,
             netTime: metrics?.productivity?.netTimeSaved ?? 0,
+            performance: metrics?.performance,
             recommendations: this.generateRecommendations(metrics)
         };
 

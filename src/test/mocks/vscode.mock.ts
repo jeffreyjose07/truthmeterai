@@ -202,6 +202,16 @@ export const mockVscode = {
     languages: {
         registerInlineCompletionItemProvider: () => ({ dispose: () => {} })
     },
+    tasks: {
+        onDidStartTask: () => ({ dispose: () => {} }),
+        onDidEndTaskProcess: () => ({ dispose: () => {} }),
+        TaskGroup: {
+            Build: 1,
+            Test: 2,
+            Clean: 3,
+            Rebuild: 4
+        }
+    },
     Uri: MockUri,
     StatusBarAlignment: {
         Left: 1,

@@ -3,8 +3,10 @@ import type { AIEventCollector } from './collectors/AIEventCollector';
 import type { CodeChangeCollector } from './collectors/CodeChangeCollector';
 import type { TimeTracker } from './collectors/TimeTracker';
 import type { GitAnalyzer } from './collectors/GitAnalyzer';
+import type { PerformanceCollector } from './collectors/PerformanceCollector';
 import type { CodeQualityAnalyzer } from './analyzers/CodeQualityAnalyzer';
 import type { ProductivityAnalyzer } from './analyzers/ProductivityAnalyzer';
+import type { PerformanceAnalyzer } from './analyzers/PerformanceAnalyzer';
 import type { ROICalculator } from './calculators/ROICalculator';
 import type { DashboardProvider } from './ui/DashboardProvider';
 import type { StatusBarManager } from './ui/StatusBarManager';
@@ -30,9 +32,11 @@ let storage: LocalStorage | undefined;
 let aiCollector: AIEventCollector | undefined;
 let codeCollector: CodeChangeCollector | undefined;
 let timeTracker: TimeTracker | undefined;
+let perfCollector: PerformanceCollector | undefined;
 let gitAnalyzer: GitAnalyzer | undefined;
 let qualityAnalyzer: CodeQualityAnalyzer | undefined;
 let productivityAnalyzer: ProductivityAnalyzer | undefined;
+let perfAnalyzer: PerformanceAnalyzer | undefined;
 let roiCalculator: ROICalculator | undefined;
 let dashboard: DashboardProvider | undefined;
 let statusBar: StatusBarManager | undefined;
@@ -189,14 +193,16 @@ async function getCollectors(context: vscode.ExtensionContext) {
         const { AIEventCollector } = await import('./collectors/AIEventCollector');
         const { CodeChangeCollector } = await import('./collectors/CodeChangeCollector');
         const { TimeTracker } = await import('./collectors/TimeTracker');
+        const { PerformanceCollector } = await import('./collectors/PerformanceCollector');
 
         aiCollector = new AIEventCollector(stor);
         codeCollector = new CodeChangeCollector(stor);
         timeTracker = new TimeTracker(stor);
+        perfCollector = new PerformanceCollector();
 
         logger.info('Collectors created');
     }
-    return { aiCollector, codeCollector, timeTracker };
+    return { aiCollector, codeCollector, timeTracker, perfCollector };
 }
 
 async function getGitAnalyzer(): Promise<GitAnalyzer> {
@@ -214,15 +220,17 @@ async function getAnalyzers(context: vscode.ExtensionContext) {
         const stor = await getStorage(context); // Get storage instance
         const { CodeQualityAnalyzer } = await import('./analyzers/CodeQualityAnalyzer');
         const { ProductivityAnalyzer } = await import('./analyzers/ProductivityAnalyzer');
+        const { PerformanceAnalyzer } = await import('./analyzers/PerformanceAnalyzer');
         const { ROICalculator } = await import('./calculators/ROICalculator');
 
         qualityAnalyzer = new CodeQualityAnalyzer();
         productivityAnalyzer = new ProductivityAnalyzer(stor); // Pass storage to ProductivityAnalyzer
+        perfAnalyzer = new PerformanceAnalyzer();
         roiCalculator = new ROICalculator();
 
         logger.info('Analyzers created');
     }
-    return { qualityAnalyzer, productivityAnalyzer, roiCalculator };
+    return { qualityAnalyzer, productivityAnalyzer, perfAnalyzer, roiCalculator };
 }
 
 async function getDashboard(context: vscode.ExtensionContext): Promise<DashboardProvider> {
@@ -277,6 +285,7 @@ async function ensureTracking(context: vscode.ExtensionContext) {
     collectors.aiCollector.startTracking();
     collectors.codeCollector.startTracking();
     collectors.timeTracker.startTracking();
+    // Performance collector starts automatically in constructor but needs disposal
 
     trackingStarted = true;
     logger.info('Tracking started successfully!');
@@ -336,6 +345,9 @@ async function calculateAndStoreMetrics(context: vscode.ExtensionContext): Promi
             collectors.timeTracker!.getMetrics()
         ]);
 
+        const perfEvents = collectors.perfCollector!.getEvents();
+        const rawAIEvents = collectors.aiCollector!.getRawEvents();
+
         logger.info(`Raw metrics collected: Suggestions=${aiMetrics.totalSuggestions}, ActiveTime=${timeMetrics.totalActiveTime}`);
 
         // 2. Run analysis using the raw data
@@ -343,6 +355,7 @@ async function calculateAndStoreMetrics(context: vscode.ExtensionContext): Promi
         
         const qualityMetrics = await analyzers.qualityAnalyzer!.analyze(undefined, aiMetrics);
         const productivityMetrics = await analyzers.productivityAnalyzer!.analyze(aiMetrics, codeMetrics, timeMetrics);
+        const perfMetrics = analyzers.perfAnalyzer!.analyze(perfEvents, rawAIEvents);
         
         // Pass productivity metrics to ROI calculator
         const roiMetrics = await analyzers.roiCalculator!.calculate(productivityMetrics); 
@@ -355,6 +368,7 @@ async function calculateAndStoreMetrics(context: vscode.ExtensionContext): Promi
             time: timeMetrics,
             quality: qualityMetrics,
             productivity: productivityMetrics,
+            performance: perfMetrics,
             roi: roiMetrics
         };
 
@@ -415,9 +429,13 @@ async function collectAllMetrics(
         throw new Error('Cancelled');
     }
 
+    const perfEvents = collectors.perfCollector!.getEvents();
+    const rawAIEvents = collectors.aiCollector!.getRawEvents();
+    const performance = analyzers.perfAnalyzer!.analyze(perfEvents, rawAIEvents);
+
     const roi = await analyzers.roiCalculator!.calculate();
 
-    return { ai, code, time, git, quality, productivity, roi };
+    return { ai, code, time, git, quality, productivity, performance, roi };
 }
 
 function yieldToEventLoop(): Promise<void> {
@@ -468,6 +486,7 @@ export function deactivate() {
     (aiCollector as any)?.dispose?.();
     (codeCollector as any)?.dispose?.();
     (timeTracker as any)?.dispose?.();
+    (perfCollector as any)?.dispose?.();
 
     // Dispose UI
     statusBar?.dispose();

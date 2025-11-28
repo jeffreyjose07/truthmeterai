@@ -101,6 +101,21 @@ export interface EconomicMetrics {
   recommendation?: string;
 }
 
+export interface PerformanceMetrics {
+  buildStats: {
+    successRate: number;
+    averageDuration: number;
+    buildsPerDay: number;
+    aiCorrelation: number; // -1 to 1, correlation between AI usage and build success
+  };
+  testStats: {
+    successRate: number;
+    averageDuration: number;
+    testsPerDay: number;
+    aiCorrelation: number; // -1 to 1
+  };
+}
+
 export interface AllMetrics {
   ai?: any;
   code?: any;
@@ -109,4 +124,5 @@ export interface AllMetrics {
   quality?: CodeQualityMetrics;
   productivity?: TrueProductivityMetrics;
   roi?: EconomicMetrics;
+  performance?: PerformanceMetrics;
 }

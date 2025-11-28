@@ -2,16 +2,16 @@
 
 **Built with Science, Not Hype**
 
-[![Version](https://img.shields.io/badge/version-1.0.13-blue.svg)](https://github.com/jeffreyjose07/truthmeterai)
+[![Version](https://img.shields.io/badge/version-1.0.15-blue.svg)](https://github.com/jeffreyjose07/truthmeterai)
 [![License](https://img.shields.io/badge/license-AGPL--3.0-green.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-140%20passing-brightgreen.svg)](#testing-and-quality-assurance)
+[![Tests](https://img.shields.io/badge/tests-145%20passing-brightgreen.svg)](#testing-and-quality-assurance)
 
 Measure the **ACTUAL** impact of AI coding assistants on developer productivity based on peer-reviewed research, not vanity metrics.
 
-> **New in v1.0.14:**
+> **New in v1.0.15:**
+> - **Performance (SPACE) Metrics:** Correlate AI usage with Build and Test outcomes.
+> - **Task Monitoring:** Automatic tracking of build/test success rates.
 > - **Custom Historical Timeframes:** Filter historical trends to view data for the last 7, 30, or 90 days.
-> - **Churn History Chart:** Visualize how your code stability (churn rate) evolves over time.
-> - **Historical Trends Dashboard:** Interactive charts correlating "Net Time Saved" vs. "AI Usage".
 
 ---
 

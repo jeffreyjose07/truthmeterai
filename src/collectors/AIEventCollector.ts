@@ -588,6 +588,15 @@ export class AIEventCollector {
     }
 
     /**
+     * Gets raw events from the circular buffer (chronological order)
+     * @param limit - Optional limit on number of events to return
+     */
+    public getRawEvents(limit?: number): AIEvent[] {
+        const events = this.getRecentEvents(60 * 24); // Get all from last 24h
+        return limit ? events.slice(-limit) : events;
+    }
+
+    /**
      * Gets aggregated metrics about AI usage
      * @returns Promise resolving to metrics object
      */

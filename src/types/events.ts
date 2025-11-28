@@ -28,3 +28,22 @@ export interface SuggestionEvent {
     line: number;
     character: number;
 }
+
+export interface BuildEvent {
+    timestamp: number;
+    type: 'build';
+    status: 'success' | 'failure';
+    duration: number;
+    system: string; // e.g., 'npm', 'maven', 'gradle'
+}
+
+export interface TestEvent {
+    timestamp: number;
+    type: 'test';
+    status: 'success' | 'failure';
+    duration: number;
+    testCount: number;
+    passedCount: number;
+    failedCount: number;
+    system: string;
+}

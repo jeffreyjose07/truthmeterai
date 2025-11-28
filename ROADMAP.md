@@ -23,7 +23,7 @@ Our development roadmap is driven by peer-reviewed research into developer produ
 ### 2. SPACE Framework Integration
 *Research Basis: Microsoft/GitHub/UVic SPACE Framework*
 - [x] **S (Satisfaction):** Add a simple "How did this session feel?" micro-survey (optional). (v1.0.9)
-- [ ] **P (Performance):** Correlate AI usage with successful build/test outcomes (if available).
+- [x] **P (Performance):** Correlate AI usage with successful build/test outcomes (if available). (v1.0.15)
 - [x] **A (Activity):** Refine "Active Coding Time" vs. "Idle/Thinking Time". (v1.0.10)
 - [ ] **C (Communication):** (Future) Team-level aggregation (opt-in).
 - [x] **E (Efficiency):** Flow state tracking (interruption analysis). (v1.0.5)
