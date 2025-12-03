@@ -2,7 +2,7 @@
 
 **Built with Science, Not Hype**
 
-[![Version](https://img.shields.io/badge/version-1.0.19-blue.svg)](https://github.com/jeffreyjose07/truthmeterai)
+[![Version](https://img.shields.io/badge/version-1.0.20-blue.svg)](https://github.com/jeffreyjose07/truthmeterai)
 [![License](https://img.shields.io/badge/license-AGPL--3.0-green.svg)](LICENSE)
 [![Tests](https://img.shields.io/badge/tests-145%20passing-brightgreen.svg)](#testing-and-quality-assurance)
 
