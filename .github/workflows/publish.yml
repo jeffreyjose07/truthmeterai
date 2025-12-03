@@ -30,3 +30,14 @@ jobs:
 
     - name: Publish to VS Code Marketplace
       run: npx vsce publish -p ${{ secrets.VSCE_PAT }}
+
+    - name: Prepare package.json for Open VSX
+      run: |
+        jq '.publisher = "jeffreyjose07"' package.json > package.json.tmp
+        mv package.json.tmp package.json
+
+    - name: Publish to Open VSX Registry
+      run: npx ovsx publish -p ${{ secrets.OVSX_PAT }}
+
+    - name: Revert package.json changes
+      run: git checkout package.json
