@@ -98,6 +98,30 @@ export class AIEventCollector {
         this.currentSession = this.generateSessionId();
         this.events = new Array(this.MAX_EVENTS);
         this.startBatchWriter();
+        this.loadHistory();
+    }
+
+    /**
+     * Load historical events from storage to populate the circular buffer
+     */
+    private async loadHistory() {
+        try {
+            const savedEvents = await this.storage.get('ai_events');
+            if (savedEvents && savedEvents.length > 0) {
+                // Sort by timestamp to ensure correct order
+                savedEvents.sort((a: any, b: any) => a.timestamp - b.timestamp);
+                
+                // Load into buffer (up to MAX_EVENTS)
+                const startIdx = Math.max(0, savedEvents.length - this.MAX_EVENTS);
+                for (let i = startIdx; i < savedEvents.length; i++) {
+                    const event = savedEvents[i];
+                    this.events[this.eventIndex] = event;
+                    this.eventIndex = (this.eventIndex + 1) % this.MAX_EVENTS;
+                }
+            }
+        } catch (error) {
+            console.error('Failed to load AI event history:', error);
+        }
     }
 
     /**
@@ -308,6 +332,11 @@ export class AIEventCollector {
     private addEvent(event: AIEvent) {
         this.events[this.eventIndex] = event;
         this.eventIndex = (this.eventIndex + 1) % this.MAX_EVENTS;
+
+        // Persist suggestions to storage
+        if (event.type === 'suggestion') {
+            this.queueWrite('ai_events', event);
+        }
 
         // Throttled status update
         if (Date.now() - this.lastStatusUpdate > this.STATUS_UPDATE_INTERVAL) {
@@ -665,7 +694,7 @@ export class AIEventCollector {
      * @returns Promise resolving to metrics object
      */
     async getMetrics() {
-        const events = this.getRecentEvents(60); // Last hour
+        const events = this.getRecentEvents(1440); // Last 24 hours (was 60 mins)
         const totalSuggestions = events.filter(e => e.type === 'suggestion').length;
         const acceptedSuggestions = events.filter(e => e.acceptedLength > 0).length;
 

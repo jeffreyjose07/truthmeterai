@@ -167,6 +167,20 @@ export class TimeTracker implements vscode.Disposable {
         const currentTotalReading = totalReading + this.readingTime;
         const currentTotalSwitches = totalSwitches + this.contextSwitches;
 
+        // Combine stored flow blocks with current session's flow blocks
+        let allFlowBlocks = sessions.flatMap((s: any) => s.flowBlocks || []);
+        
+        // Add current session's finished flow blocks
+        allFlowBlocks = allFlowBlocks.concat(this.currentFlowBlocks);
+
+        // Add active flow block if currently flowing
+        if (this.isFlowing) {
+            allFlowBlocks.push({
+                start: this.flowStartTimestamp,
+                end: Date.now()
+            });
+        }
+
         return {
             totalActiveTime: currentTotalTime / 1000 / 60, // minutes
             flowTime: currentTotalFlow / 1000 / 60, // minutes
@@ -177,7 +191,7 @@ export class TimeTracker implements vscode.Disposable {
             currentSessionTime: this.activeTime / 1000 / 60, // minutes
             totalSessions: totalSessions,
             averageSessionLength: totalSessions > 0 ? (totalTime / totalSessions) / 1000 / 60 : 0,
-            flowBlocks: sessions.flatMap((s: any) => s.flowBlocks || []) // Flatten all flow blocks from all sessions
+            flowBlocks: allFlowBlocks
         };
     }
 
