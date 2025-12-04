@@ -82,6 +82,14 @@ export class AIEventCollector {
     private readonly DELETION_RATIO_THRESHOLD = 0.3; // 30% - max deletion ratio for AI
     private readonly RAPID_TYPING_WINDOW = 500; // ms - window for rapid typing
 
+    // Region Tracking for True Fix Time
+    private aiRegions: Map<string, Array<{
+        startLine: number;
+        endLine: number;
+        timestamp: number;
+        originalLength: number;
+    }>> = new Map();
+
     /**
      * Creates a new AIEventCollector instance
      * @param storage - LocalStorage instance for persisting events
@@ -149,13 +157,14 @@ export class AIEventCollector {
 
         if (this.isAIGenerated(event)) {
             this.lastAISuggestion.set(uri, now); // Track time of AI suggestion
+            const changeSize = this.calculateChangeSize(event);
 
             const aiEvent: AIEvent = {
                 timestamp: now,
                 type: 'suggestion',
                 sessionId: this.currentSession,
                 fileType: event.document.languageId,
-                suggestionLength: this.calculateChangeSize(event),
+                suggestionLength: changeSize,
                 acceptedLength: 0,
                 modificationTime: 0,
                 contextSize: event.document.lineCount,
@@ -166,15 +175,70 @@ export class AIEventCollector {
             this.lastSuggestion = aiEvent;
 
             this.trackModifications(event.document.uri.toString(), aiEvent);
+
+            // NEW: Track AI Region for True Fix Time
+            const regions = this.aiRegions.get(uri) || [];
+            // Prune old regions (> 1 hour)
+            const freshRegions = regions.filter(r => now - r.timestamp < 3600000);
+            
+            event.contentChanges.forEach(change => {
+                const lineCount = change.text.split('\n').length - 1;
+                freshRegions.push({
+                    startLine: change.range.start.line,
+                    endLine: change.range.start.line + lineCount,
+                    timestamp: now,
+                    originalLength: change.text.length
+                });
+            });
+            this.aiRegions.set(uri, freshRegions);
+
         } else {
             // Human edit - check if it's a "fix" for recent AI code
-            const lastAITime = this.lastAISuggestion.get(uri);
-            // If AI suggested something in this file within the last 5 minutes
-            if (lastAITime && (now - lastAITime < 300000)) {
-                // Calculate time spent editing (delta since last change, capped at 5s to exclude idle time)
-                const timeDelta = Math.min(now - lastChange, 5000);
-                if (timeDelta > 0) {
-                    this.totalFixTime += timeDelta;
+            const regions = this.aiRegions.get(uri);
+            if (regions && regions.length > 0) {
+                let isFix = false;
+                
+                // Check if any change overlaps with an AI region
+                for (const change of event.contentChanges) {
+                    const changeStart = change.range.start.line;
+                    const changeEnd = change.range.end.line;
+
+                    for (const region of regions) {
+                        // Simple overlap check: (StartA <= EndB) and (EndA >= StartB)
+                        if (changeStart <= region.endLine && changeEnd >= region.startLine) {
+                            isFix = true;
+                            
+                            // Check for Churn (Significant Deletion)
+                            if (change.text === '' && change.rangeLength > 0) {
+                                const deletedRatio = change.rangeLength / region.originalLength;
+                                if (deletedRatio > 0.5) {
+                                    // >50% deleted = High Churn
+                                    this.recordChurn(1.0); 
+                                }
+                            }
+                            break;
+                        }
+                    }
+                    if (isFix) {break;}
+                }
+
+                if (isFix) {
+                    // Calculate time spent editing (delta since last change, capped at 10s to exclude idle time)
+                    const timeDelta = Math.min(now - lastChange, 10000);
+                    if (timeDelta > 0) {
+                        this.totalFixTime += timeDelta;
+                    }
+                }
+            }
+            
+            // Fallback: If no regions (legacy/cleared), use file-level heuristic
+            else {
+                const lastAITime = this.lastAISuggestion.get(uri);
+                if (lastAITime && (now - lastAITime < 300000)) {
+                    const timeDelta = Math.min(now - lastChange, 5000);
+                    if (timeDelta > 0) {
+                        this.totalFixTime += timeDelta;
+                    }
                 }
             }
         }
@@ -607,6 +671,7 @@ export class AIEventCollector {
 
         // Calculate per-language stats
         const languageStats: Record<string, { suggestions: number, accepted: number, acceptanceRate: number }> = {};
+        const fileStats: Record<string, { suggestions: number, churn: number }> = {};
         
         for (const event of events) {
             if (event.type !== 'suggestion') { continue; }
@@ -619,6 +684,28 @@ export class AIEventCollector {
             languageStats[lang].suggestions++;
             if (event.acceptedLength > 0) {
                 languageStats[lang].accepted++;
+            }
+
+            // File Stats
+            const uri = event.uri || 'unknown';
+            if (!fileStats[uri]) {
+                fileStats[uri] = { suggestions: 0, churn: 0 };
+            }
+            fileStats[uri].suggestions++;
+        }
+
+        // Add churn data to file stats (if available in churn events)
+        // This is a simplified mapping; ideally churn events should link back to files
+        // For now, we'll calculate churn based on modificationTime events in the same file
+        for (const uri in fileStats) {
+            const fileEvents = events.filter(e => e.uri === uri && e.modificationTime > 0);
+            if (fileEvents.length > 0) {
+                // Average modification time as a proxy for churn intensity? 
+                // Better: Use the 'churn' type events if they have URIs, but they don't currently.
+                // Let's use modification events.
+                const totalMod = fileEvents.reduce((sum, e) => sum + e.modificationTime, 0);
+                // Normalize churn score (0-1) based on mod time (e.g. > 5 mins = 1.0)
+                fileStats[uri].churn = Math.min(totalMod / 300000, 1);
             }
         }
 
@@ -635,7 +722,8 @@ export class AIEventCollector {
             churnRate: await this.calculateChurnRate(),
             sessionCount: this.getUniqueSessionCount(events),
             totalFixTime: this.totalFixTime,
-            languageStats
+            languageStats,
+            fileStats
         };
     }
 

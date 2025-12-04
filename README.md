@@ -2,16 +2,18 @@
 
 **Built with Science, Not Hype**
 
-[![Version](https://img.shields.io/badge/version-1.0.21-blue.svg)](https://github.com/jeffreyjose07/truthmeterai)
+[![Version](https://img.shields.io/badge/version-1.1.0-blue.svg)](https://github.com/jeffreyjose07/truthmeterai)
 [![License](https://img.shields.io/badge/license-AGPL--3.0-green.svg)](LICENSE)
 [![Tests](https://img.shields.io/badge/tests-145%20passing-brightgreen.svg)](#testing-and-quality-assurance)
 
 Measure the **ACTUAL** impact of AI coding assistants on developer productivity based on peer-reviewed research, not vanity metrics.
 
-> **New in v1.0.15:**
-> - **Performance (SPACE) Metrics:** Correlate AI usage with Build and Test outcomes.
-> - **Task Monitoring:** Automatic tracking of build/test success rates.
-> - **Custom Historical Timeframes:** Filter historical trends to view data for the last 7, 30, or 90 days.
+> **New in v1.1.0:**
+> - **Report Generation:** Export professional HTML/PDF reports for stakeholders.
+> - **Interactive Timeline:** Visualize your "Flow State" and AI suggestions over time.
+> - **Risk Heatmap:** Identify files with high AI intensity and high churn.
+> - **Comparison Mode:** Track Period-over-Period trends (e.g., this week vs last week).
+> - **Sparklines:** Instant visual trends for key metrics.
 
 ---
 
@@ -113,11 +115,20 @@ True cost-benefit including license fees, time wasted, technical debt, and hidde
 ### Real-Time Dashboard
 
 View comprehensive metrics in an interactive dashboard showing:
+- **Visual Timeline:** See exactly when you were in "Flow" vs. when AI interrupted you.
+- **Risk Heatmap:** Spot files where AI is generating unstable code (High Churn).
+- **Trend Analysis:** Compare current performance vs. previous periods with sparklines.
 - Actual ROI vs Perceived ROI
 - Code churn rates (42% baseline from research)
-- Code duplication trends (4x increase detection)
 - Net time impact (time saved vs time wasted)
-- Personalized recommendations based on your data
+
+### Report Generation
+
+Generate professional HTML reports for stakeholders:
+- **Executive Summary:** High-level ROI and productivity impact.
+- **SPACE Analysis:** Detailed breakdown of developer experience.
+- **Recommendations:** Actionable advice to improve AI usage.
+- **Exportable:** Save as a standalone HTML file to share.
 
 ### Status Bar Integration
 

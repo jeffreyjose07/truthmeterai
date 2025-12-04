@@ -1,6 +1,8 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import { LocalStorage } from '../storage/LocalStorage';
+import { AIEventCollector } from '../collectors/AIEventCollector';
+import { TimeTracker } from '../collectors/TimeTracker';
 
 export class DashboardProvider {
     private panel: vscode.WebviewPanel | undefined;
@@ -9,7 +11,9 @@ export class DashboardProvider {
 
     constructor(
         private context: vscode.ExtensionContext,
-        private storage: LocalStorage
+        private storage: LocalStorage,
+        private aiCollector: AIEventCollector,
+        private timeTracker: TimeTracker
     ) {}
 
     public setRefreshCallback(callback: () => Promise<void>) {
@@ -88,6 +92,49 @@ export class DashboardProvider {
             <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
             <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
             <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+            <style>
+                /* Tooltip CSS */
+                .tooltip {
+                    position: relative;
+                    display: inline-block;
+                    cursor: help;
+                    border-bottom: 1px dotted var(--text-secondary);
+                }
+                
+                .tooltip .tooltiptext {
+                    visibility: hidden;
+                    width: 220px;
+                    background-color: var(--card-bg);
+                    color: var(--text-primary);
+                    text-align: center;
+                    border-radius: 6px;
+                    padding: 8px;
+                    position: absolute;
+                    z-index: 10;
+                    bottom: 125%;
+                    left: 50%;
+                    margin-left: -110px;
+                    opacity: 0;
+                    transition: opacity 0.3s;
+                    font-size: 12px;
+                    font-weight: normal;
+                    box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+                    border: 1px solid var(--border-color);
+                    line-height: 1.4;
+                }
+                
+                .tooltip:hover .tooltiptext {
+                    visibility: visible;
+                    opacity: 1;
+                }
+
+                /* Sparkline Canvas */
+                .sparkline-container {
+                    width: 100%;
+                    height: 40px;
+                    margin-top: 8px;
+                }
+            </style>
         </head>
         <body class="material-theme">
             <div class="app-bar">
@@ -123,12 +170,17 @@ export class DashboardProvider {
                     <div class="kpi-grid">
                         <div class="md-card kpi-card primary">
                             <div class="card-header">
-                                <span class="card-title">Net Productivity</span>
+                                <span class="card-title tooltip">Net Productivity
+                                    <span class="tooltiptext">Actual velocity gain vs manual coding, accounting for rework.</span>
+                                </span>
                                 <span class="material-icons-round icon">speed</span>
                             </div>
                             <div class="card-body">
                                 <div class="kpi-value" id="roiValue">--%</div>
                                 <div class="kpi-sub">Actual Gain</div>
+                                <div class="sparkline-container">
+                                    <canvas id="roiSparkline"></canvas>
+                                </div>
                             </div>
                             <div class="card-footer">
                                 <span class="trend" id="roiTrend">--</span>
@@ -138,12 +190,17 @@ export class DashboardProvider {
 
                         <div class="md-card kpi-card secondary">
                             <div class="card-header">
-                                <span class="card-title">Time Impact</span>
+                                <span class="card-title tooltip">Time Impact
+                                    <span class="tooltiptext">Net hours saved after deducting review and fix time.</span>
+                                </span>
                                 <span class="material-icons-round icon">schedule</span>
                             </div>
                             <div class="card-body">
                                 <div class="kpi-value" id="timeValue">--h</div>
                                 <div class="kpi-sub">Net Saved/Week</div>
+                                <div class="sparkline-container">
+                                    <canvas id="timeSparkline"></canvas>
+                                </div>
                             </div>
                             <div class="card-footer">
                                 <span class="trend" id="timeTrend">--</span>
@@ -153,12 +210,17 @@ export class DashboardProvider {
 
                         <div class="md-card kpi-card warning">
                             <div class="card-header">
-                                <span class="card-title">Code Churn</span>
+                                <span class="card-title tooltip">Code Churn
+                                    <span class="tooltiptext">% of AI code rewritten shortly after generation. Lower is better.</span>
+                                </span>
                                 <span class="material-icons-round icon">delete_sweep</span>
                             </div>
                             <div class="card-body">
                                 <div class="kpi-value" id="churnValue">--%</div>
                                 <div class="kpi-sub">Rewritten Code</div>
+                                <div class="sparkline-container">
+                                    <canvas id="churnSparkline"></canvas>
+                                </div>
                             </div>
                             <div class="card-footer">
                                 <span class="trend" id="churnTrend">--</span>
@@ -168,12 +230,17 @@ export class DashboardProvider {
 
                         <div class="md-card kpi-card info">
                             <div class="card-header">
-                                <span class="card-title">Duplication</span>
+                                <span class="card-title tooltip">Duplication
+                                    <span class="tooltiptext">Ratio of copied code blocks. Lower is better.</span>
+                                </span>
                                 <span class="material-icons-round icon">content_copy</span>
                             </div>
                             <div class="card-body">
                                 <div class="kpi-value" id="duplicationValue">--x</div>
                                 <div class="kpi-sub">Growth Factor</div>
+                                <div class="sparkline-container">
+                                    <canvas id="duplicationSparkline"></canvas>
+                                </div>
                             </div>
                             <div class="card-footer">
                                 <span class="trend" id="duplicationTrend">--</span>
@@ -199,6 +266,26 @@ export class DashboardProvider {
                         </div>
                         <div class="chart-container" style="position: relative; height: 300px; width: 100%;">
                             <canvas id="churnChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- AI Activity and Flow Timeline Chart -->
+                    <div class="md-card chart-card">
+                        <div class="card-header-row">
+                            <h2>AI Activity & Flow Timeline</h2>
+                        </div>
+                        <div class="chart-container" style="position: relative; height: 300px; width: 100%;">
+                            <canvas id="timelineChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Risk Heatmap Chart -->
+                    <div class="md-card chart-card">
+                        <div class="card-header-row">
+                            <h2>AI Risk Heatmap (Usage vs. Churn)</h2>
+                        </div>
+                        <div class="chart-container" style="position: relative; height: 350px; width: 100%;">
+                            <canvas id="riskChart"></canvas>
                         </div>
                     </div>
 
@@ -334,6 +421,11 @@ export class DashboardProvider {
                     }
                 });
 
+                let productivityChart = null;
+                let churnChart = null;
+                let timelineChart = null;
+                let riskChart = null;
+
                 function updateDashboard(data) {
                     document.getElementById('loadingState').style.display = 'none';
                     document.getElementById('dashboardContent').style.display = 'block';
@@ -344,19 +436,19 @@ export class DashboardProvider {
 
                     // Update ROI
                     const roi = data.roi || 0;
-                    updateMetric('roi', (roi * 100).toFixed(0) + '%', roi > 0 ? 'positive' : 'negative');
+                    updateMetric('roi', (roi * 100).toFixed(0) + '%', roi > 0 ? 'positive' : 'negative', data.comparison?.roi);
                     
                     // Update Time
                     const time = data.netTime || 0;
-                    updateMetric('time', (time > 0 ? '+' : '') + time.toFixed(1) + 'h', time > 0 ? 'positive' : 'negative');
+                    updateMetric('time', (time > 0 ? '+' : '') + time.toFixed(1) + 'h', time > 0 ? 'positive' : 'negative', data.comparison?.netTime);
 
                     // Update Churn
                     const churn = data.churn || 0;
-                    updateMetric('churn', (churn * 100).toFixed(0) + '%', churn > 0.3 ? 'negative' : 'positive');
+                    updateMetric('churn', (churn * 100).toFixed(0) + '%', churn > 0.3 ? 'negative' : 'positive', data.comparison?.churn);
 
                     // Update Duplication
                     const dup = data.duplication || 0;
-                    updateMetric('duplication', dup.toFixed(1) + 'x', dup > 1.5 ? 'negative' : 'positive');
+                    updateMetric('duplication', dup.toFixed(1) + 'x', dup > 1.5 ? 'negative' : 'positive', data.comparison?.duplication);
 
                     // Update Bars
                     const perceived = data.perceivedROI || 0;
@@ -392,7 +484,7 @@ export class DashboardProvider {
                             const div = document.createElement('div');
                             div.className = 'alert-item';
                             // Use simple string concatenation to avoid template literal issues in TypeScript
-                            div.innerHTML = '<span class="material-icons-round">' + (rec.icon || 'info') + '</span>' +
+                            div.innerHTML = '‹span class="material-icons-round">' + (rec.icon || 'info') + '</span>' +
                                            '<div class="alert-content">' +
                                                '<strong>' + rec.title + '</strong>' +
                                                '<p>' + rec.text + '</p>' +
@@ -403,11 +495,21 @@ export class DashboardProvider {
                         alertsContainer.innerHTML = '<div class="empty-state">No critical alerts.</div>';
                     }
 
-                    // Render Chart if history exists
+                    // Render Charts if history exists
                     if (data.history && data.history.length > 0) {
                         renderChart(data.history);
                         renderChurnChart(data.history);
+                        
+                        // Render Sparklines
+                        renderSparkline('roiSparkline', data.history.map(h => h.roi?.overallROI || 0), '#4caf50');
+                        renderSparkline('timeSparkline', data.history.map(h => h.productivity?.netTimeSaved || 0), '#2196f3');
+                        renderSparkline('churnSparkline', data.history.map(h => (h.quality?.codeChurn?.rate || 0) * 100), '#ff9800');
+                        renderSparkline('duplicationSparkline', data.history.map(h => h.quality?.duplication?.cloneRate || 0), '#00bcd4');
                     }
+                    
+                    // Render Timeline & Risk Charts
+                    renderTimelineChart(data.flowBlocks || [], data.rawAiEvents || []);
+                    renderRiskChart(data.fileStats || {});
 
                     // Update Performance Metrics
                     if (data.performance) {
@@ -441,9 +543,6 @@ export class DashboardProvider {
                     const el = document.getElementById(id);
                     if (el) el.textContent = text;
                 }
-
-                let productivityChart = null;
-                let churnChart = null;
 
                 function renderChart(history) {
                     const ctx = document.getElementById('productivityChart').getContext('2d');
@@ -586,12 +685,239 @@ export class DashboardProvider {
                     });
                 }
 
-                function updateMetric(id, value, trendClass) {
+                function renderTimelineChart(flowBlocks, aiEvents) {
+                    const ctx = document.getElementById('timelineChart').getContext('2d');
+
+                    if (timelineChart) {
+                        timelineChart.destroy();
+                    }
+                    
+                    const flowData = flowBlocks.map(block => ({
+                        x: [new Date(block.start), new Date(block.end)],
+                        y: 'Flow State'
+                    }));
+
+                    const aiData = aiEvents.filter(event => event.type === 'suggestion').map(event => ({
+                        x: new Date(event.timestamp),
+                        y: 'AI Suggestion',
+                                                            label: \`AI: \${event.fileType} (\${event.suggestionLength} chars)\`                    }));
+
+                    timelineChart = new Chart(ctx, {
+                        type: 'bar',
+                        data: {
+                            labels: ['Flow State', 'AI Suggestion'],
+                            datasets: [
+                                {
+                                    label: 'Flow State',
+                                    data: flowData,
+                                    backgroundColor: 'rgba(76, 175, 80, 0.5)', // Green
+                                    borderColor: '#4caf50',
+                                    borderWidth: 1,
+                                    stack: 'timeline'
+                                },
+                                {
+                                    label: 'AI Suggestion',
+                                    data: aiData,
+                                    backgroundColor: 'rgba(33, 150, 243, 0.8)', // Blue
+                                    borderColor: '#2196f3',
+                                    borderWidth: 1,
+                                    type: 'scatter', // Overlay as scatter points
+                                    pointRadius: 5,
+                                    pointHoverRadius: 7,
+                                    pointStyle: 'crossRot',
+                                    tooltip: {
+                                        callbacks: {
+                                            label: function(context) {
+                                                let label = context.dataset.label || '';
+                                                if (context.raw.label) {
+                                                    label += ': ' + context.raw.label;
+                                                }
+                                                return label;
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        },
+                        options: {
+                            indexAxis: 'y', // Make it a horizontal bar chart
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            scales: {
+                                x: {
+                                    type: 'time',
+                                    time: {
+                                        unit: 'hour',
+                                        displayFormats: {
+                                            hour: 'MMM D, h:mm a'
+                                        }
+                                    },
+                                    title: {
+                                        display: true,
+                                        text: 'Time'
+                                    }
+                                },
+                                y: {
+                                    title: {
+                                        display: true,
+                                        text: 'Event Type'
+                                    }
+                                }
+                            },
+                            plugins: {
+                                title: {
+                                    display: true,
+                                    text: 'Developer Activity Timeline'
+                                },
+                                tooltip: {
+                                    mode: 'index',
+                                    intersect: false
+                                }
+                            }
+                        }
+                    });
+                }
+
+                function renderRiskChart(fileStats) {
+                    const ctx = document.getElementById('riskChart').getContext('2d');
+
+                    if (riskChart) {
+                        riskChart.destroy();
+                    }
+
+                    // Transform data for scatter plot
+                    const dataPoints = [];
+                    for (const [file, stats] of Object.entries(fileStats)) {
+                        // Clean up filename for display (remove long paths)
+                        const fileName = file.split(/[\\\\/]/).pop();
+                        dataPoints.push({
+                            x: stats.suggestions, // Usage (Intensity)
+                            y: stats.churn * 100, // Churn % (Risk)
+                            label: fileName,
+                            fullPath: file
+                        });
+                    }
+
+                    // Color coding logic
+                    const colors = dataPoints.map(p => {
+                        if (p.y > 30 && p.x > 5) return 'rgba(244, 67, 54, 0.7)'; // High Risk (Red)
+                        if (p.y < 10 && p.x > 10) return 'rgba(76, 175, 80, 0.7)'; // Productive (Green)
+                        return 'rgba(33, 150, 243, 0.5)'; // Normal (Blue)
+                    });
+
+                    riskChart = new Chart(ctx, {
+                        type: 'scatter',
+                        data: {
+                            datasets: [{
+                                label: 'Files',
+                                data: dataPoints,
+                                backgroundColor: colors,
+                                borderColor: colors.map(c => c.replace('0.7', '1').replace('0.5', '1')),
+                                pointRadius: 8,
+                                pointHoverRadius: 10
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                title: {
+                                    display: true,
+                                    text: 'Risk Heatmap: AI Intensity vs. Code Churn'
+                                },
+                                tooltip: {
+                                    callbacks: {
+                                        label: function(context) {
+                                            const p = context.raw;
+                                            return \`\${p.label}: \${p.x} suggestions, \${p.y.toFixed(1)}% churn\`;
+                                        }
+                                    }
+                                },
+                                annotation: {
+                                    annotations: {
+                                        box1: {
+                                            type: 'box',
+                                            xMin: 10, xMax: 1000,
+                                            yMin: 30, yMax: 100,
+                                            backgroundColor: 'rgba(255, 99, 132, 0.1)',
+                                            borderColor: 'rgba(255, 99, 132, 0.2)',
+                                            borderWidth: 1,
+                                            label: { content: 'Risk Zone', enabled: true }
+                                        }
+                                    }
+                                }
+                            },
+                            scales: {
+                                x: {
+                                    type: 'linear',
+                                    position: 'bottom',
+                                    title: { display: true, text: 'AI Suggestions (Intensity)' }
+                                },
+                                y: {
+                                    title: { display: true, text: 'Churn Rate (%)' },
+                                    min: 0,
+                                    max: 100
+                                }
+                            }
+                        }
+                    });
+                }
+
+                // Track sparkline instances to destroy them on update
+                const sparklineInstances = {};
+
+                function renderSparkline(canvasId, data, color) {
+                    const ctx = document.getElementById(canvasId).getContext('2d');
+                    
+                    if (sparklineInstances[canvasId]) {
+                        sparklineInstances[canvasId].destroy();
+                    }
+
+                    sparklineInstances[canvasId] = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: data.map((_, i) => i), // Dummy labels
+                            datasets: [{
+                                data: data,
+                                borderColor: color,
+                                borderWidth: 2,
+                                pointRadius: 0, // Hide points for cleaner look
+                                fill: false,
+                                tension: 0.4 // Smooth curves
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: { legend: { display: false }, tooltip: { enabled: false } },
+                            scales: {
+                                x: { display: false },
+                                y: { display: false }
+                            },
+                            layout: { padding: 0 }
+                        }
+                    });
+                }
+
+                function updateMetric(id, value, trendClass, diff) {
                     const el = document.getElementById(id + 'Value');
                     el.textContent = value;
                     // Reset classes
                     el.classList.remove('text-positive', 'text-negative');
                     el.classList.add('text-' + trendClass);
+
+                    // Update Comparison Trend
+                    const trendEl = document.getElementById(id + 'Trend');
+                    if (trendEl && diff !== undefined && !isNaN(diff)) {
+                        const diffPercent = (diff * 100).toFixed(1) + '%';
+                        const icon = diff > 0 ? 'trending_up' : (diff < 0 ? 'trending_down' : 'trending_flat');
+                        // Invert logic for "bad" metrics like churn/duplication
+                        const isBadMetric = id === 'churn' || id === 'duplication';
+                        const isGoodDiff = isBadMetric ? diff < 0 : diff > 0;
+                        const colorClass = isGoodDiff ? 'text-positive' : 'text-negative';
+                        
+                        trendEl.innerHTML = \`<span class="material-icons-round \${colorClass}" style="font-size:16px; vertical-align:middle;">\${icon}</span> \${diff > 0 ? '+' : ''}\${diffPercent}\`;
+                    }
                 }
             </script>
         </body>
@@ -610,19 +936,65 @@ export class DashboardProvider {
         }
 
         const metrics = await this.storage.getLatestMetrics();
-        const history = await this.storage.getMetricsHistory(this.currentHistoryDays);
+        // Fetch double the history to calculate previous period comparison
+        const fullHistory = await this.storage.getMetricsHistory(this.currentHistoryDays * 2);
+        
+        const now = Date.now();
+        const periodMs = this.currentHistoryDays * 24 * 60 * 60 * 1000;
+        const currentPeriodStart = now - periodMs;
+        const previousPeriodStart = now - (periodMs * 2);
+
+        // Split history
+        const currentHistory = fullHistory.filter((m: any) => m.timestamp >= currentPeriodStart);
+        const previousHistory = fullHistory.filter((m: any) => m.timestamp >= previousPeriodStart && m.timestamp < currentPeriodStart);
+
+        // Calculate Averages for Comparison
+        const calcAvg = (data: any[], selector: (m: any) => number) => {
+            if (data.length === 0) {return 0;}
+            return data.reduce((sum, m) => sum + (selector(m) || 0), 0) / data.length;
+        };
+
+        const currentStats = {
+            roi: calcAvg(currentHistory, m => m.roi?.overallROI),
+            netTime: calcAvg(currentHistory, m => m.productivity?.netTimeSaved),
+            churn: calcAvg(currentHistory, m => m.quality?.codeChurn?.rate),
+            duplication: calcAvg(currentHistory, m => m.quality?.duplication?.cloneRate)
+        };
+
+        const prevStats = {
+            roi: calcAvg(previousHistory, m => m.roi?.overallROI),
+            netTime: calcAvg(previousHistory, m => m.productivity?.netTimeSaved),
+            churn: calcAvg(previousHistory, m => m.quality?.codeChurn?.rate),
+            duplication: calcAvg(previousHistory, m => m.quality?.duplication?.cloneRate)
+        };
+
+        const calculateDiff = (curr: number, prev: number) => {
+            if (prev === 0) {return 0;}
+            return (curr - prev) / Math.abs(prev);
+        };
+
+        const comparison = {
+            roi: calculateDiff(currentStats.roi, prevStats.roi),
+            netTime: calculateDiff(currentStats.netTime, prevStats.netTime),
+            churn: calculateDiff(currentStats.churn, prevStats.churn),
+            duplication: calculateDiff(currentStats.duplication, prevStats.duplication)
+        };
         
         // Calculate derived values for display
         const dashboardData = {
             hasData: !!metrics,
-            history: history,
+            history: currentHistory, // Only show current history in charts by default
             roi: metrics?.roi?.overallROI ?? 0,
             perceivedROI: metrics?.productivity?.perceivedGain ?? 0,
             churn: metrics?.quality?.codeChurn?.rate ?? 0,
             duplication: metrics?.quality?.duplication?.cloneRate ?? 0,
             netTime: metrics?.productivity?.netTimeSaved ?? 0,
             performance: metrics?.performance,
-            recommendations: this.generateRecommendations(metrics)
+            recommendations: this.generateRecommendations(metrics),
+            rawAiEvents: this.aiCollector.getRawEvents(),
+            flowBlocks: metrics?.productivity?.flowBlocks || [],
+            fileStats: metrics?.ai?.fileStats || {},
+            comparison: comparison // Pass comparison data
         };
 
         this.panel?.webview.postMessage({

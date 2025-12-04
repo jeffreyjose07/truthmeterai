@@ -61,7 +61,8 @@ export class ProductivityAnalyzer {
             perceivedGain: acceptanceRate * 1.5, // Define perceivedGain
             satisfaction: {
                 average: averageSatisfaction
-            }
+            },
+            flowBlocks: timeMetrics?.flowBlocks || []
         };
     }
 

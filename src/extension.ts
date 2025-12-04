@@ -1,4 +1,6 @@
 import * as vscode from 'vscode';
+import * as fs from 'fs';
+import * as path from 'path';
 import type { AIEventCollector } from './collectors/AIEventCollector';
 import type { CodeChangeCollector } from './collectors/CodeChangeCollector';
 import type { TimeTracker } from './collectors/TimeTracker';
@@ -13,6 +15,7 @@ import type { StatusBarManager } from './ui/StatusBarManager';
 import type { LocalStorage } from './storage/LocalStorage';
 import { Logger } from './utils/Logger';
 import { AllMetrics } from './types/metrics';
+import { ReportGenerator } from './reporters/ReportGenerator';
 
 /**
  * INDUSTRY BEST PRACTICES VERSION
@@ -40,6 +43,7 @@ let perfAnalyzer: PerformanceAnalyzer | undefined;
 let roiCalculator: ROICalculator | undefined;
 let dashboard: DashboardProvider | undefined;
 let statusBar: StatusBarManager | undefined;
+let reportGenerator: ReportGenerator | undefined;
 
 let analysisToken: vscode.CancellationTokenSource | undefined;
 let logger: Logger;
@@ -91,11 +95,43 @@ export async function activate(context: vscode.ExtensionContext) {
                     return;
                 }
 
-                const report = generateReport(metrics);
-                const dash = await getDashboard(context);
-                dash.showReport(report);
+                // Generate HTML Content
+                if (!reportGenerator) {
+                    reportGenerator = new ReportGenerator();
+                }
+                
+                const workspaceName = vscode.workspace.name || 'Project';
+                const htmlContent = reportGenerator.generateHTML(metrics, workspaceName);
 
-                vscode.window.showInformationMessage('Report generated');
+                // Prompt user to save
+                const defaultUri = vscode.workspace.workspaceFolders 
+                    ? vscode.Uri.file(path.join(vscode.workspace.workspaceFolders[0].uri.fsPath, 'AI_Impact_Report.html'))
+                    : undefined;
+
+                const saveUri = await vscode.window.showSaveDialog({
+                    defaultUri: defaultUri,
+                    filters: {
+                        'HTML Files': ['html']
+                    },
+                    title: 'Save AI Impact Report'
+                });
+
+                if (saveUri) {
+                    fs.writeFileSync(saveUri.fsPath, htmlContent);
+                    
+                    const action = await vscode.window.showInformationMessage(
+                        `Report saved to ${path.basename(saveUri.fsPath)}`,
+                        'Open Report',
+                        'Open in Browser'
+                    );
+
+                    if (action === 'Open Report') {
+                        const doc = await vscode.workspace.openTextDocument(saveUri);
+                        await vscode.window.showTextDocument(doc);
+                    } else if (action === 'Open in Browser') {
+                        await vscode.env.openExternal(saveUri);
+                    }
+                }
             } catch (error) {
                 logger.error('Error generating report', error);
                 vscode.window.showErrorMessage('Failed to generate report');
@@ -236,8 +272,9 @@ async function getAnalyzers(context: vscode.ExtensionContext) {
 async function getDashboard(context: vscode.ExtensionContext): Promise<DashboardProvider> {
     if (!dashboard) {
         const stor = await getStorage(context);
+        const collectors = await getCollectors(context); // Get collectors here
         const { DashboardProvider } = await import('./ui/DashboardProvider');
-        dashboard = new DashboardProvider(context, stor);
+        dashboard = new DashboardProvider(context, stor, collectors.aiCollector!, collectors.timeTracker!);
 
         // Set refresh callback to recalculate metrics
         dashboard.setRefreshCallback(async () => {
@@ -440,34 +477,6 @@ async function collectAllMetrics(
 
 function yieldToEventLoop(): Promise<void> {
     return new Promise(resolve => setImmediate(resolve));
-}
-
-function generateReport(metrics: AllMetrics) {
-    return {
-        summary: {
-            actualProductivityGain: metrics.productivity?.actualGain || 0,
-            perceivedProductivityGain: metrics.productivity?.perceivedGain || 0,
-            codeQualityImpact: metrics.quality?.overallScore || 0,
-            economicROI: metrics.roi?.overallROI || 0,
-            recommendation: getRecommendation(metrics)
-        },
-        details: metrics
-    };
-}
-
-function getRecommendation(metrics: AllMetrics): string {
-    const roi = metrics.roi?.overallROI || 0;
-    const quality = metrics.quality?.overallScore || 0;
-
-    if (roi > 2 && quality > 0.7) {
-        return "Strong positive impact - Continue and expand usage";
-    } else if (roi > 1 && quality > 0.5) {
-        return "Moderate positive impact - Focus on training";
-    } else if (roi < 1 && quality < 0.5) {
-        return "Negative impact - Reduce usage and retrain team";
-    } else {
-        return "Mixed results - Analyze by team member and use case";
-    }
 }
 
 /**

@@ -54,6 +54,7 @@ export interface TrueProductivityMetrics {
   satisfaction?: {
     average: number;
   };
+  flowBlocks?: Array<{ start: number; end: number }>;
 }
 
 export interface DeveloperExperienceMetrics {
