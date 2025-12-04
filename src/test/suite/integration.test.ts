@@ -30,6 +30,13 @@ suite('Integration Test Suite', () => {
         mockContext = new MockExtensionContext();
         storage = new LocalStorage(mockContext as any);
         await storage.initialize();
+        // Clean up any leftover data from previous test runs
+        await storage.clearAll();
+    });
+
+    teardown(async () => {
+        // Clean up after each test
+        await storage.clearAll();
     });
 
     test('should integrate collectors with storage', async () => {

@@ -1,4 +1,6 @@
 import * as assert from 'assert';
+import * as fs from 'fs';
+import * as path from 'path';
 import { LocalStorage } from '../../storage/LocalStorage';
 import { MockExtensionContext } from '../mocks/vscode.mock';
 
@@ -6,18 +8,24 @@ suite('LocalStorage Test Suite', () => {
     let storage: LocalStorage;
     let mockContext: MockExtensionContext;
 
-    setup(() => {
+    setup(async () => {
         mockContext = new MockExtensionContext();
         storage = new LocalStorage(mockContext as any);
+        await storage.initialize();
+        // Clean up any leftover data from previous test runs
+        await storage.clearAll();
+    });
+
+    teardown(async () => {
+        // Clean up after each test
+        await storage.clearAll();
     });
 
     test('should initialize successfully', async () => {
-        await storage.initialize();
         assert.ok(true, 'Storage initialized');
     });
 
     test('should store and retrieve data', async () => {
-        await storage.initialize();
 
         const testData = { timestamp: Date.now(), value: 42 };
         await storage.store('test_key', testData);
@@ -28,8 +36,6 @@ suite('LocalStorage Test Suite', () => {
     });
 
     test('should handle multiple stores to same key', async () => {
-        await storage.initialize();
-
         await storage.store('multi_key', { id: 1 });
         await storage.store('multi_key', { id: 2 });
         await storage.store('multi_key', { id: 3 });
@@ -40,22 +46,18 @@ suite('LocalStorage Test Suite', () => {
         assert.strictEqual(retrieved[2].id, 3);
     });
 
-    test('should limit stored entries to 1000', async () => {
-        await storage.initialize();
-
-        // Store 1100 items
+    test('should limit stored entries to 1000 for metrics_history', async () => {
+        // Store 1100 items using metrics_history key (which has 1000 limit)
         for (let i = 0; i < 1100; i++) {
-            await storage.store('limit_key', { index: i });
+            await storage.store('metrics_history', { index: i });
         }
 
-        const retrieved = await storage.get('limit_key');
+        const retrieved = await storage.get('metrics_history');
         assert.strictEqual(retrieved.length, 1000, 'Should limit to 1000 entries');
         assert.strictEqual(retrieved[0].index, 100, 'Should have removed oldest entries');
     });
 
     test('should store and retrieve metrics', async () => {
-        await storage.initialize();
-
         const metrics = {
             quality: {
                 codeChurn: { rate: 0.3, trend: 'increasing' as const, aiVsHuman: 1.5 },
@@ -74,8 +76,6 @@ suite('LocalStorage Test Suite', () => {
     });
 
     test('should retrieve metrics history', async () => {
-        await storage.initialize();
-
         const baseMetrics = {
             quality: {
                 codeChurn: { rate: 0.3, trend: 'stable' as const, aiVsHuman: 1.5 },
@@ -95,7 +95,6 @@ suite('LocalStorage Test Suite', () => {
     });
 
     test('should export data as JSON', async () => {
-        await storage.initialize();
 
         await storage.store('metrics_history', { value: 'test' });
         await storage.store('churn_events', { event: 'churn' });
@@ -109,8 +108,6 @@ suite('LocalStorage Test Suite', () => {
     });
 
     test('should clear all data', async () => {
-        await storage.initialize();
-
         await storage.store('metrics_history', { value: 1 });
         await storage.storeMetrics({ quality: {} } as any);
 
@@ -124,15 +121,11 @@ suite('LocalStorage Test Suite', () => {
     });
 
     test('should return empty array for non-existent key', async () => {
-        await storage.initialize();
-
         const retrieved = await storage.get('non_existent_key');
         assert.strictEqual(retrieved.length, 0);
     });
 
     test('should use memory cache for repeated reads', async () => {
-        await storage.initialize();
-
         await storage.store('cache_test', { value: 'cached' });
 
         const first = await storage.get('cache_test');
