@@ -73,12 +73,12 @@ export class AIEventCollector {
     private readonly FILE_WRITE_WAIT = 200; // ms - wait for file write to complete
 
     // AI detection thresholds
-    private readonly MIN_INSERTION_SIZE = 30; // chars - minimum for AI detection
-    private readonly MIN_MULTI_CHANGE_SIZE = 20; // chars - for multiple changes
-    private readonly MIN_RAPID_TYPING_SIZE = 20; // chars - for rapid typing detection
-    private readonly MIN_BLOCK_INSERTION = 40; // chars - single large block
-    private readonly MIN_MULTILINE_SIZE = 25; // chars - multi-line additions
-    private readonly MIN_RECENT_ACTIVITY_SIZE = 15; // chars - with recent AI activity
+    private readonly MIN_INSERTION_SIZE = 10; // chars - reduced from 30 for better streaming detection
+    private readonly MIN_MULTI_CHANGE_SIZE = 10; // chars - reduced
+    private readonly MIN_RAPID_TYPING_SIZE = 10; // chars - reduced
+    private readonly MIN_BLOCK_INSERTION = 20; // chars - reduced
+    private readonly MIN_MULTILINE_SIZE = 15; // chars - reduced
+    private readonly MIN_RECENT_ACTIVITY_SIZE = 5; // chars - reduced
     private readonly DELETION_RATIO_THRESHOLD = 0.3; // 30% - max deletion ratio for AI
     private readonly RAPID_TYPING_WINDOW = 500; // ms - window for rapid typing
 
@@ -258,9 +258,9 @@ export class AIEventCollector {
         const event = tracker.event;
         
         // Heuristic 1: Cumulative Size (Streaming detection)
-        // If > 30 chars appeared in < 1s, likely AI or paste
+        // If >= 10 chars appeared in < 2s, likely AI or paste
         const duration = tracker.lastUpdateTime - tracker.startTime;
-        if (totalInserted > this.MIN_INSERTION_SIZE && duration < 2000) {
+        if (totalInserted >= this.MIN_INSERTION_SIZE && duration < 2000) {
              return true;
         }
 
@@ -271,8 +271,8 @@ export class AIEventCollector {
         }
         
         // Heuristic 5: Rapid typing (Avg speed > 100ms per char is human, < 50ms is AI)
-        // 50 chars in 500ms = 10ms/char = AI
-        if (totalInserted > 20 && duration < 1000) {
+        // 10 chars in 1000ms = 100ms/char
+        if (totalInserted >= 10 && duration < 1000) {
             return true;
         }
 

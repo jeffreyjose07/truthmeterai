@@ -499,7 +499,7 @@ export class DashboardProvider {
                             const div = document.createElement('div');
                             div.className = 'alert-item';
                             // Use simple string concatenation to avoid template literal issues in TypeScript
-                            div.innerHTML = '‹span class="material-icons-round">' + (rec.icon || 'info') + '</span>' +
+                            div.innerHTML = '<span class="material-icons-round">' + (rec.icon || 'info') + '</span>' +
                                            '<div class="alert-content">' +
                                                '<strong>' + rec.title + '</strong>' +
                                                '<p>' + rec.text + '</p>' +
@@ -561,7 +561,7 @@ export class DashboardProvider {
 
                 function renderChart(history) {
                     const ctx = document.getElementById('productivityChart').getContext('2d');
-                    
+
                     // Prepare data
                     const labels = history.map(h => new Date(h.timestamp).toLocaleDateString());
                     const netTimeData = history.map(h => h.productivity?.netTimeSaved || 0);
@@ -569,6 +569,7 @@ export class DashboardProvider {
 
                     if (productivityChart) {
                         productivityChart.destroy();
+                        productivityChart = null;
                     }
 
                     productivityChart = new Chart(ctx, {
@@ -639,6 +640,7 @@ export class DashboardProvider {
 
                     if (churnChart) {
                         churnChart.destroy();
+                        churnChart = null;
                     }
 
                     churnChart = new Chart(ctx, {
@@ -705,6 +707,7 @@ export class DashboardProvider {
 
                     if (timelineChart) {
                         timelineChart.destroy();
+                        timelineChart = null;
                     }
                     
                     const flowData = flowBlocks.map(block => ({
@@ -811,6 +814,7 @@ export class DashboardProvider {
 
                     if (riskChart) {
                         riskChart.destroy();
+                        riskChart = null;
                     }
 
                     // Transform data for scatter plot
