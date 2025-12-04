@@ -954,6 +954,10 @@ export class DashboardProvider {
         // Fetch double the history to calculate previous period comparison
         const fullHistory = await this.storage.getMetricsHistory(this.currentHistoryDays * 2);
         
+        // Fetch live data for immediate feedback
+        const liveAiMetrics = await this.aiCollector.getMetrics();
+        const liveTimeMetrics = await this.timeTracker.getMetrics();
+
         const now = Date.now();
         const periodMs = this.currentHistoryDays * 24 * 60 * 60 * 1000;
         const currentPeriodStart = now - periodMs;
@@ -1007,8 +1011,8 @@ export class DashboardProvider {
             performance: metrics?.performance,
             recommendations: this.generateRecommendations(metrics),
             rawAiEvents: this.aiCollector.getRawEvents(),
-            flowBlocks: metrics?.productivity?.flowBlocks || [],
-            fileStats: metrics?.ai?.fileStats || {},
+            flowBlocks: liveTimeMetrics.flowBlocks || metrics?.productivity?.flowBlocks || [],
+            fileStats: liveAiMetrics.fileStats || metrics?.ai?.fileStats || {},
             comparison: comparison // Pass comparison data
         };
 
