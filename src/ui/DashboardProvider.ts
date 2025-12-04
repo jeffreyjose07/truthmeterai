@@ -709,24 +709,37 @@ export class DashboardProvider {
                     
                     const flowData = flowBlocks.map(block => ({
                         x: [new Date(block.start), new Date(block.end)],
-                        y: 'Flow State'
+                        y: block.type === 'focus' ? 'Focus Session' : 'Flow State'
                     }));
+
+                    // Empty State Handling within Chart
+                    const isEmpty = flowBlocks.length === 0 && aiEvents.length === 0;
+                    const titleText = isEmpty ? 'Start coding to track your timeline...' : 'Developer Activity Timeline';
 
                     const aiData = aiEvents.filter(event => event.type === 'suggestion').map(event => ({
                         x: new Date(event.timestamp),
                         y: 'AI Suggestion',
-                                                            label: \`AI: \${event.fileType} (\${event.suggestionLength} chars)\`                    }));
+                        label: \`AI: \${event.fileType} (\${event.suggestionLength} chars)\`
+                    }));
 
                     timelineChart = new Chart(ctx, {
                         type: 'bar',
                         data: {
-                            labels: ['Flow State', 'AI Suggestion'],
+                            labels: ['Flow State', 'Focus Session', 'AI Suggestion'],
                             datasets: [
                                 {
                                     label: 'Flow State',
-                                    data: flowData,
+                                    data: flowData.filter(d => d.y === 'Flow State'),
                                     backgroundColor: 'rgba(76, 175, 80, 0.5)', // Green
                                     borderColor: '#4caf50',
+                                    borderWidth: 1,
+                                    stack: 'timeline'
+                                },
+                                {
+                                    label: 'Focus Session',
+                                    data: flowData.filter(d => d.y === 'Focus Session'),
+                                    backgroundColor: 'rgba(139, 195, 74, 0.3)', // Light Green
+                                    borderColor: '#8bc34a',
                                     borderWidth: 1,
                                     stack: 'timeline'
                                 },
@@ -782,7 +795,7 @@ export class DashboardProvider {
                             plugins: {
                                 title: {
                                     display: true,
-                                    text: 'Developer Activity Timeline'
+                                    text: titleText
                                 },
                                 tooltip: {
                                     mode: 'index',
@@ -802,16 +815,22 @@ export class DashboardProvider {
 
                     // Transform data for scatter plot
                     const dataPoints = [];
-                    for (const [file, stats] of Object.entries(fileStats)) {
-                        // Clean up filename for display (remove long paths)
-                        const fileName = file.split(/[\\\\/]/).pop();
-                        dataPoints.push({
-                            x: stats.suggestions, // Usage (Intensity)
-                            y: stats.churn * 100, // Churn % (Risk)
-                            label: fileName,
-                            fullPath: file
-                        });
+                    let hasData = false;
+                    if (fileStats) {
+                        for (const [file, stats] of Object.entries(fileStats)) {
+                            // Clean up filename for display (remove long paths)
+                            const fileName = file.split(/[\\\\/]/).pop();
+                            dataPoints.push({
+                                x: stats.suggestions, // Usage (Intensity)
+                                y: stats.churn * 100, // Churn % (Risk)
+                                label: fileName,
+                                fullPath: file
+                            });
+                            hasData = true;
+                        }
                     }
+                    
+                    const titleText = hasData ? 'Risk Heatmap: AI Intensity vs. Code Churn' : 'Risk Heatmap: No AI files detected yet';
 
                     // Color coding logic
                     const colors = dataPoints.map(p => {
@@ -838,7 +857,7 @@ export class DashboardProvider {
                             plugins: {
                                 title: {
                                     display: true,
-                                    text: 'Risk Heatmap: AI Intensity vs. Code Churn'
+                                    text: titleText
                                 },
                                 tooltip: {
                                     callbacks: {

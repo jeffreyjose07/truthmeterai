@@ -179,6 +179,14 @@ export class TimeTracker implements vscode.Disposable {
                 start: this.flowStartTimestamp,
                 end: Date.now()
             });
+        } 
+        // NEW: Show current session as "Focus" even if not yet 15 mins (Flow)
+        else if (this.currentStreak > 1000) { // Only if > 1 second
+            allFlowBlocks.push({
+                start: Date.now() - this.currentStreak,
+                end: Date.now(),
+                type: 'focus' // Distinguish from deep flow
+            });
         }
 
         return {

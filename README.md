@@ -8,6 +8,11 @@
 
 Measure the **ACTUAL** impact of AI coding assistants on developer productivity based on peer-reviewed research, not vanity metrics.
 
+> **New in v1.1.4:**
+> - **Better AI Detection:** Now tracks streaming AI insertions (Copilot/Cursor) that add text in small chunks, ensuring accurate "AI Activity" timelines.
+> - **Focus Sessions:** Timelines now show current active sessions immediately, even before reaching the "Flow State" threshold.
+> - **Dashboard Improvements:** Handled empty states for smoother user experience.
+
 > **New in v1.1.2:**
 > - **Dashboard Chart Fix:** Resolved an issue where time-based charts were not rendering due to a missing Chart.js date adapter, ensuring all graphs display correctly.
 

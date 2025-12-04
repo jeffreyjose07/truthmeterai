@@ -124,6 +124,15 @@ export class AIEventCollector {
         }
     }
 
+    // Streaming AI Detection
+    private recentInsertions: Map<string, { 
+        size: number, 
+        startTime: number, 
+        lastUpdateTime: number,
+        event: vscode.TextDocumentChangeEvent 
+    }> = new Map();
+    private readonly STREAM_WINDOW = 1000; // 1 second to accumulate streaming chars
+
     /**
      * Starts tracking AI events from multiple sources:
      * - Editor text document changes
@@ -133,30 +142,54 @@ export class AIEventCollector {
      */
     startTracking() {
         this.trackCascadeEvents();
-        this.trackDocumentChangesDebounced();  // OPTIMIZED
+        this.trackDocumentChangesCumulative(); // CHANGED: Cumulative tracking
         this.trackInlineSuggestions();
         this.trackFileSystemChanges();  // Track external file changes
         this.trackDocumentSaves();  // Update cache on saves
     }
 
-    // OPTIMIZATION 2: Debounced document tracking
-    private trackDocumentChangesDebounced() {
+    // OPTIMIZATION 2: Cumulative document tracking (Handles Streaming AI)
+    private trackDocumentChangesCumulative() {
         vscode.workspace.onDidChangeTextDocument((event) => {
             const uri = event.document.uri.toString();
 
             // Skip non-file schemes
             if (event.document.uri.scheme !== 'file') { return; }
 
-            // Clear existing debouncer
+            // Calculate change size for this specific event
+            const changeSize = this.calculateChangeSize(event);
+            if (changeSize === 0) { return; }
+
+            // Get or initialize cumulative tracker
+            let tracker = this.recentInsertions.get(uri);
+            const now = Date.now();
+
+            if (!tracker || (now - tracker.lastUpdateTime > this.STREAM_WINDOW)) {
+                // New tracking window
+                tracker = {
+                    size: 0,
+                    startTime: now,
+                    lastUpdateTime: now,
+                    event: event // Keep reference to latest event for context
+                };
+            }
+
+            // Update metrics
+            tracker.size += changeSize;
+            tracker.lastUpdateTime = now;
+            tracker.event = event; // Always use latest event for patterns/context
+            this.recentInsertions.set(uri, tracker);
+
+            // Debounce the processing check
             const existing = this.debouncers.get(uri);
             if (existing) {
                 clearTimeout(existing);
                 this.pendingTimers.delete(existing);
             }
 
-            // Debounce: wait after last keystroke
+            // Wait for stream to pause/finish before analyzing
             const timer = setTimeout(() => {
-                this.processDocumentChange(event);
+                this.processAccumulatedChange(uri);
                 this.debouncers.delete(uri);
                 this.pendingTimers.delete(timer);
             }, this.DEBOUNCE_DELAY);
@@ -166,77 +199,117 @@ export class AIEventCollector {
         });
     }
 
-    private processDocumentChange(event: vscode.TextDocumentChangeEvent) {
+    private processAccumulatedChange(uri: string) {
+        const tracker = this.recentInsertions.get(uri);
+        if (!tracker) { return; }
+
+        const event = tracker.event;
+        const totalSize = tracker.size;
+        const duration = tracker.lastUpdateTime - tracker.startTime;
+        
         // Throttle: max once per second per document (per-document throttling)
-        const uri = event.document.uri.toString();
         const now = Date.now();
         const lastChange = this.lastChangeTimeByDocument.get(uri) || 0;
 
-        if (now - lastChange < this.THROTTLE_INTERVAL) {
+        // If it's a very short burst or processed recently, skip
+        // But allow if it's a significant accumulated block
+        if (now - lastChange < this.THROTTLE_INTERVAL && totalSize < 100) {
             return;
         }
 
         this.lastChangeTimeByDocument.set(uri, now);
-        this.lastChangeTime = now; // Keep global for backward compatibility
+        this.lastChangeTime = now; 
 
-        if (this.isAIGenerated(event)) {
-            this.lastAISuggestion.set(uri, now); // Track time of AI suggestion
-            const changeSize = this.calculateChangeSize(event);
+        // Use ACCUMULATED size for AI detection
+        if (this.isAIGeneratedAccumulated(tracker)) {
+            this.lastAISuggestion.set(uri, now); 
 
             const aiEvent: AIEvent = {
                 timestamp: now,
                 type: 'suggestion',
                 sessionId: this.currentSession,
                 fileType: event.document.languageId,
-                suggestionLength: changeSize,
+                suggestionLength: totalSize, // Use accumulated size
                 acceptedLength: 0,
                 modificationTime: 0,
                 contextSize: event.document.lineCount,
                 uri: uri
             };
 
-            this.addEvent(aiEvent);  // Use circular buffer
+            this.addEvent(aiEvent);
             this.lastSuggestion = aiEvent;
 
-            this.trackModifications(event.document.uri.toString(), aiEvent);
-
-            // NEW: Track AI Region for True Fix Time
-            const regions = this.aiRegions.get(uri) || [];
-            // Prune old regions (> 1 hour)
-            const freshRegions = regions.filter(r => now - r.timestamp < 3600000);
+            this.trackModifications(uri, aiEvent);
             
-            event.contentChanges.forEach(change => {
-                const lineCount = change.text.split('\n').length - 1;
-                freshRegions.push({
-                    startLine: change.range.start.line,
-                    endLine: change.range.start.line + lineCount,
-                    timestamp: now,
-                    originalLength: change.text.length
-                });
-            });
-            this.aiRegions.set(uri, freshRegions);
+            // Track Region
+            this.updateRegions(uri, event, now);
 
         } else {
-            // Human edit - check if it's a "fix" for recent AI code
-            const regions = this.aiRegions.get(uri);
+            // Human edit logic...
+            this.handleHumanEdit(uri, event, now, lastChange);
+        }
+        
+        // Clear tracker after processing
+        this.recentInsertions.delete(uri);
+    }
+
+    private isAIGeneratedAccumulated(tracker: { size: number, startTime: number, lastUpdateTime: number, event: vscode.TextDocumentChangeEvent }): boolean {
+        const totalInserted = tracker.size;
+        const event = tracker.event;
+        
+        // Heuristic 1: Cumulative Size (Streaming detection)
+        // If > 30 chars appeared in < 1s, likely AI or paste
+        const duration = tracker.lastUpdateTime - tracker.startTime;
+        if (totalInserted > this.MIN_INSERTION_SIZE && duration < 2000) {
+             return true;
+        }
+
+        // Heuristic 3: Patterns in the LATEST chunk (often contains the closing brace/semicolon)
+        const changeText = event.contentChanges.map(c => c.text).join('\n');
+        if (this.detectAIPatterns(changeText)) {
+            return true;
+        }
+        
+        // Heuristic 5: Rapid typing (Avg speed > 100ms per char is human, < 50ms is AI)
+        // 50 chars in 500ms = 10ms/char = AI
+        if (totalInserted > 20 && duration < 1000) {
+            return true;
+        }
+
+        return false;
+    }
+
+    private updateRegions(uri: string, event: vscode.TextDocumentChangeEvent, now: number) {
+        const regions = this.aiRegions.get(uri) || [];
+        const freshRegions = regions.filter(r => now - r.timestamp < 3600000);
+        
+        event.contentChanges.forEach(change => {
+            const lineCount = change.text.split('\n').length - 1;
+            freshRegions.push({
+                startLine: change.range.start.line,
+                endLine: change.range.start.line + lineCount,
+                timestamp: now,
+                originalLength: change.text.length
+            });
+        });
+        this.aiRegions.set(uri, freshRegions);
+    }
+
+    private handleHumanEdit(uri: string, event: vscode.TextDocumentChangeEvent, now: number, lastChange: number) {
+         const regions = this.aiRegions.get(uri);
             if (regions && regions.length > 0) {
                 let isFix = false;
                 
-                // Check if any change overlaps with an AI region
                 for (const change of event.contentChanges) {
                     const changeStart = change.range.start.line;
                     const changeEnd = change.range.end.line;
 
                     for (const region of regions) {
-                        // Simple overlap check: (StartA <= EndB) and (EndA >= StartB)
                         if (changeStart <= region.endLine && changeEnd >= region.startLine) {
                             isFix = true;
-                            
-                            // Check for Churn (Significant Deletion)
                             if (change.text === '' && change.rangeLength > 0) {
                                 const deletedRatio = change.rangeLength / region.originalLength;
                                 if (deletedRatio > 0.5) {
-                                    // >50% deleted = High Churn
                                     this.recordChurn(1.0); 
                                 }
                             }
@@ -247,15 +320,12 @@ export class AIEventCollector {
                 }
 
                 if (isFix) {
-                    // Calculate time spent editing (delta since last change, capped at 10s to exclude idle time)
                     const timeDelta = Math.min(now - lastChange, 10000);
                     if (timeDelta > 0) {
                         this.totalFixTime += timeDelta;
                     }
                 }
             }
-            
-            // Fallback: If no regions (legacy/cleared), use file-level heuristic
             else {
                 const lastAITime = this.lastAISuggestion.get(uri);
                 if (lastAITime && (now - lastAITime < 300000)) {
@@ -265,7 +335,6 @@ export class AIEventCollector {
                     }
                 }
             }
-        }
     }
 
     private trackCascadeEvents() {
