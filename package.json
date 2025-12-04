@@ -2,7 +2,7 @@
   "name": "truthmeter-ai",
   "displayName": "TruthMeter AI - Coding Assistant Metrics",
   "description": "Measure ACTUAL AI coding assistant ROI (Copilot, Cascade, Cursor, Cody, etc.) with research-backed metrics",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "publisher": "JeffreyJose",
   "author": {
     "name": "Jeffrey Jose"

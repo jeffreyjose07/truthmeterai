@@ -87,6 +87,11 @@ export class DashboardProvider {
         );
         const chartJsUri = this.panel!.webview.asWebviewUri(chartJsPath);
 
+        const chartAdapterJsPath = vscode.Uri.file(
+            path.join(this.context.extensionPath, 'resources', 'chart-adapter.js')
+        );
+        const chartAdapterJsUri = this.panel!.webview.asWebviewUri(chartAdapterJsPath);
+
         // CSP: Allow scripts from local resources and 'unsafe-inline' (needed for Chart.js and our inline scripts)
         const csp = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${this.panel!.webview.cspSource} 'unsafe-inline' https://fonts.googleapis.com; script-src ${this.panel!.webview.cspSource} 'unsafe-inline'; font-src https://fonts.gstatic.com; img-src ${this.panel!.webview.cspSource} https:;">`;
 
@@ -101,6 +106,7 @@ export class DashboardProvider {
             <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
             <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
             <script src="${chartJsUri}"></script>
+            <script src="${chartAdapterJsUri}"></script>
             <style>
                 /* Tooltip CSS */
                 .tooltip {
