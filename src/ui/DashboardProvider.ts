@@ -82,16 +82,25 @@ export class DashboardProvider {
         );
         const styleUri = this.panel!.webview.asWebviewUri(stylePath);
 
+        const chartJsPath = vscode.Uri.file(
+            path.join(this.context.extensionPath, 'resources', 'chart.js')
+        );
+        const chartJsUri = this.panel!.webview.asWebviewUri(chartJsPath);
+
+        // CSP: Allow scripts from local resources and 'unsafe-inline' (needed for Chart.js and our inline scripts)
+        const csp = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${this.panel!.webview.cspSource} 'unsafe-inline' https://fonts.googleapis.com; script-src ${this.panel!.webview.cspSource} 'unsafe-inline'; font-src https://fonts.gstatic.com; img-src ${this.panel!.webview.cspSource} https:;">`;
+
         return `<!DOCTYPE html>
         <html lang="en">
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            ${csp}
             <title>AI Impact Dashboard</title>
             <link href="${styleUri}" rel="stylesheet">
             <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
             <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
-            <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+            <script src="${chartJsUri}"></script>
             <style>
                 /* Tooltip CSS */
                 .tooltip {
@@ -1048,12 +1057,8 @@ export class DashboardProvider {
     }
 
     private async exportData() {
-        const data = await this.storage.exportData();
-        const doc = await vscode.workspace.openTextDocument({
-            content: data,
-            language: 'json'
-        });
-        await vscode.window.showTextDocument(doc);
+        // Execute the report generation command
+        await vscode.commands.executeCommand('aiMetrics.generateReport');
     }
 
     public showReport(_report: any) {
