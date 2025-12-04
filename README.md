@@ -2,11 +2,22 @@
 
 **Built with Science, Not Hype**
 
-[![Version](https://img.shields.io/badge/version-1.1.3-blue.svg)](https://github.com/jeffreyjose07/truthmeterai)
+[![Version](https://img.shields.io/badge/version-1.1.6-blue.svg)](https://github.com/jeffreyjose07/truthmeterai)
 [![License](https://img.shields.io/badge/license-AGPL--3.0-green.svg)](LICENSE)
 [![Tests](https://img.shields.io/badge/tests-145%20passing-brightgreen.svg)](#testing-and-quality-assurance)
 
 Measure the **ACTUAL** impact of AI coding assistants on developer productivity based on peer-reviewed research, not vanity metrics.
+
+> **New in v1.1.6:**
+> - **Critical Fix:** Replaced corrupted chart-adapter.js file (50KB complete file vs 3.7KB truncated).
+> - **Fix:** Resolved Canvas reuse errors in Chart.js - proper chart cleanup on refresh.
+> - **Performance:** Moved metrics history from memory to disk storage (reduced memory from 1MB+ to <10KB).
+> - **Stability:** All dashboard charts now render correctly with proper date adapter.
+
+> **New in v1.1.5:**
+> - **Fix:** Resolved rendering issue in Quality Insights alerts (broken HTML).
+> - **Fix:** Significantly improved AI detection for short streaming completions (10+ chars).
+> - **UI:** Improved empty state messages for Risk Heatmap and Timeline.
 
 > **New in v1.1.4:**
 > - **Better AI Detection:** Now tracks streaming AI insertions (Copilot/Cursor) that add text in small chunks, ensuring accurate "AI Activity" timelines.

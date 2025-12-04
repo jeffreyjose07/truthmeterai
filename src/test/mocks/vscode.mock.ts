@@ -2,11 +2,18 @@
  * Mock VS Code API for unit testing
  */
 
+import * as os from 'os';
+import * as path from 'path';
+
+const tempDir = path.join(os.tmpdir(), 'truthmeter-ai-test');
+
 export class MockExtensionContext {
     subscriptions: any[] = [];
     extensionPath = '/mock/extension/path';
     globalState = new MockMemento();
     workspaceState = new MockMemento();
+    globalStorageUri = new MockUri(tempDir);
+    storageUri = new MockUri(path.join(tempDir, 'workspace'));
 
     asAbsolutePath(relativePath: string): string {
         return `/mock/extension/path/${relativePath}`;
