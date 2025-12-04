@@ -2,11 +2,16 @@
 
 **Built with Science, Not Hype**
 
-[![Version](https://img.shields.io/badge/version-1.1.0-blue.svg)](https://github.com/jeffreyjose07/truthmeterai)
+[![Version](https://img.shields.io/badge/version-1.1.1-blue.svg)](https://github.com/jeffreyjose07/truthmeterai)
 [![License](https://img.shields.io/badge/license-AGPL--3.0-green.svg)](LICENSE)
 [![Tests](https://img.shields.io/badge/tests-145%20passing-brightgreen.svg)](#testing-and-quality-assurance)
 
 Measure the **ACTUAL** impact of AI coding assistants on developer productivity based on peer-reviewed research, not vanity metrics.
+
+> **New in v1.1.1:**
+> - **Offline HTML Reports:** "Export Report" now generates a self-contained HTML file with embedded charts (no internet required).
+> - **Bundled Charting:** Dashboard now works offline and in restricted environments (Chart.js included).
+> - **Bug Fixes:** Fixed issue where dashboard graphs wouldn't load due to CSP restrictions.
 
 > **New in v1.1.0:**
 > - **Report Generation:** Export professional HTML/PDF reports for stakeholders.

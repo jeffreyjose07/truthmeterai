@@ -1,7 +1,15 @@
 import * as vscode from 'vscode';
+import * as fs from 'fs';
+import * as path from 'path';
 import { AllMetrics } from '../types/metrics';
 
 export class ReportGenerator {
+    private extensionPath: string | undefined;
+
+    constructor(extensionPath?: string) {
+        this.extensionPath = extensionPath;
+    }
+
     public generateHTML(metrics: AllMetrics, projectName: string): string {
         const timestamp = new Date().toLocaleDateString(undefined, { 
             weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' 
@@ -9,13 +17,29 @@ export class ReportGenerator {
         
         const metricsJson = JSON.stringify(metrics, null, 2);
 
+        let chartJsScript = '<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>';
+        
+        // Try to inline Chart.js if extensionPath is provided and file exists
+        if (this.extensionPath) {
+            try {
+                const chartJsPath = path.join(this.extensionPath, 'resources', 'chart.js');
+                if (fs.existsSync(chartJsPath)) {
+                    const chartJsContent = fs.readFileSync(chartJsPath, 'utf8');
+                    chartJsScript = `<script>${chartJsContent}</script>`;
+                }
+            } catch (e) {
+                console.error('Failed to inline Chart.js:', e);
+                // Fallback to CDN is already set
+            }
+        }
+
         return `<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Impact Report - ${projectName}</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    ${chartJsScript}
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
     <style>

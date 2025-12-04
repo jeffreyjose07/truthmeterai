@@ -97,7 +97,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
                 // Generate HTML Content
                 if (!reportGenerator) {
-                    reportGenerator = new ReportGenerator();
+                    reportGenerator = new ReportGenerator(context.extensionPath);
                 }
                 
                 const workspaceName = vscode.workspace.name || 'Project';
