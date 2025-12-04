@@ -10,6 +10,18 @@ import { DashboardProvider } from '../../ui/DashboardProvider';
 import { StatusBarManager } from '../../ui/StatusBarManager';
 import { MockExtensionContext } from '../mocks/vscode.mock';
 
+class MockAIEventCollector {
+    getRawEvents() { return []; }
+    startTracking() {}
+    getMetrics() { return { totalSuggestions: 0, acceptanceRate: 0, averageModificationTime: 0, churnRate: 0, sessionCount: 0, totalFixTime: 0, languageStats: {}, fileStats: {} }; }
+}
+
+class MockTimeTracker {
+    startTracking() {}
+    dispose() {}
+    getMetrics() { return { totalActiveTime: 0, flowTime: 0, typingTime: 0, readingTime: 0, flowEfficiency: 0, contextSwitches: 0, currentSessionTime: 0, totalSessions: 0, averageSessionLength: 0, flowBlocks: [] }; }
+}
+
 suite('Integration Test Suite', () => {
     let storage: LocalStorage;
     let mockContext: MockExtensionContext;
@@ -113,7 +125,7 @@ suite('Integration Test Suite', () => {
         await storage.storeMetrics(mockMetrics as any);
 
         // Display in dashboard
-        const dashboard = new DashboardProvider(mockContext as any, storage);
+        const dashboard = new DashboardProvider(mockContext as any, storage, new MockAIEventCollector() as any, new MockTimeTracker() as any);
         await dashboard.show();
 
         // Verify dashboard can retrieve and display data
@@ -193,7 +205,7 @@ suite('Integration Test Suite', () => {
 
         await storage.storeMetrics(problematicMetrics as any);
 
-        const dashboard = new DashboardProvider(mockContext as any, storage);
+        const dashboard = new DashboardProvider(mockContext as any, storage, new MockAIEventCollector() as any, new MockTimeTracker() as any);
         await dashboard.show();
 
         // Dashboard should generate alerts for:
@@ -376,7 +388,7 @@ suite('Integration Test Suite', () => {
         const callbackError: Error | null = null;
 
         // Create dashboard with refresh callback
-        const dashboard = new DashboardProvider(mockContext as any, storage);
+        const dashboard = new DashboardProvider(mockContext as any, storage, new MockAIEventCollector() as any, new MockTimeTracker() as any);
 
         dashboard.setRefreshCallback(async () => {
             callbackInvoked = true;
@@ -458,7 +470,7 @@ suite('Integration Test Suite', () => {
         };
 
         await storage.storeMetrics(zeroMetrics as any);
-        const dashboard = new DashboardProvider(mockContext as any, storage);
+        const dashboard = new DashboardProvider(mockContext as any, storage, new MockAIEventCollector() as any, new MockTimeTracker() as any);
         await dashboard.show();
 
         const retrieved = await storage.getLatestMetrics();
@@ -496,7 +508,7 @@ suite('Integration Test Suite', () => {
         await storage.storeMetrics(initialMetrics as any);
 
         // Create dashboard
-        const dashboard = new DashboardProvider(mockContext as any, storage);
+        const dashboard = new DashboardProvider(mockContext as any, storage, new MockAIEventCollector() as any, new MockTimeTracker() as any);
         await dashboard.show();
 
         // Get initial state
@@ -530,7 +542,7 @@ suite('Integration Test Suite', () => {
 
         // Step 1: Setup - Create collector and dashboard
         const aiCollector = new AIEventCollector(storage);
-        const dashboard = new DashboardProvider(mockContext as any, storage);
+        const dashboard = new DashboardProvider(mockContext as any, storage, new MockAIEventCollector() as any, new MockTimeTracker() as any);
         aiCollector.startTracking();
 
         // Step 2: Simulate AI-generated code (realistic TypeScript function)
@@ -717,7 +729,7 @@ export async function calculateOrderTotal(
 
         const aiCollector = new AIEventCollector(storage);
         const codeCollector = new CodeChangeCollector(storage);
-        const dashboard = new DashboardProvider(mockContext as any, storage);
+        const dashboard = new DashboardProvider(mockContext as any, storage, new MockAIEventCollector() as any, new MockTimeTracker() as any);
 
         aiCollector.startTracking();
         codeCollector.startTracking();

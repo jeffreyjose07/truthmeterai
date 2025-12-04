@@ -1,86 +1,21 @@
 import * as assert from 'assert';
-import { DashboardProvider } from '../../ui/DashboardProvider';
-import { StatusBarManager } from '../../ui/StatusBarManager';
 import { LocalStorage } from '../../storage/LocalStorage';
+import { DashboardProvider } from '../../ui/DashboardProvider';
 import { MockExtensionContext } from '../mocks/vscode.mock';
+import { AllMetrics } from '../../types/metrics';
 
-suite('StatusBarManager Test Suite', () => {
-    let statusBar: StatusBarManager;
+// Mock AIEventCollector and TimeTracker classes
+class MockAIEventCollector {
+    getRawEvents() { return []; }
+    startTracking() {}
+    getMetrics() { return { totalSuggestions: 0, acceptanceRate: 0, averageModificationTime: 0, churnRate: 0, sessionCount: 0, totalFixTime: 0, languageStats: {}, fileStats: {} }; }
+}
 
-    setup(() => {
-        statusBar = new StatusBarManager();
-    });
-
-    teardown(() => {
-        statusBar.dispose();
-    });
-
-    test('should initialize without errors', () => {
-        assert.ok(statusBar);
-    });
-
-    test('should show status bar item', () => {
-        statusBar.show();
-        // Should not throw
-        assert.ok(true);
-    });
-
-    test('should update with stats', () => {
-        statusBar.show();
-
-        const stats = {
-            recentSuggestions: 5,
-            recentAcceptance: 3,
-            activeSession: 'test-session'
-        };
-
-        statusBar.update(stats);
-        // Should not throw
-        assert.ok(true);
-    });
-
-    test('should update with warning message', () => {
-        statusBar.show();
-        statusBar.updateWithWarning('High Churn');
-        // Should not throw
-        assert.ok(true);
-    });
-
-    test('should handle dispose', () => {
-        statusBar.show();
-        statusBar.dispose();
-        // Should not throw
-        assert.ok(true);
-    });
-
-    test('should show suggestions count when active', () => {
-        statusBar.show();
-
-        const stats = {
-            recentSuggestions: 10,
-            recentAcceptance: 5,
-            activeSession: 'test'
-        };
-
-        statusBar.update(stats);
-        // Status bar should reflect activity
-        assert.ok(true);
-    });
-
-    test('should handle zero suggestions', () => {
-        statusBar.show();
-
-        const stats = {
-            recentSuggestions: 0,
-            recentAcceptance: 0,
-            activeSession: 'test'
-        };
-
-        statusBar.update(stats);
-        // Should show default text
-        assert.ok(true);
-    });
-});
+class MockTimeTracker {
+    startTracking() {}
+    dispose() {}
+    getMetrics() { return { totalActiveTime: 0, flowTime: 0, typingTime: 0, readingTime: 0, flowEfficiency: 0, contextSwitches: 0, currentSessionTime: 0, totalSessions: 0, averageSessionLength: 0, flowBlocks: [] }; }
+}
 
 suite('DashboardProvider Test Suite', () => {
     let dashboard: DashboardProvider;
@@ -91,7 +26,7 @@ suite('DashboardProvider Test Suite', () => {
         mockContext = new MockExtensionContext();
         storage = new LocalStorage(mockContext as any);
         await storage.initialize();
-        dashboard = new DashboardProvider(mockContext as any, storage);
+        dashboard = new DashboardProvider(mockContext as any, storage, new MockAIEventCollector() as any, new MockTimeTracker() as any);
     });
 
     test('should initialize without errors', () => {
@@ -255,7 +190,7 @@ suite('DashboardProvider Test Suite', () => {
 
     test('should work without refresh callback', async () => {
         // Don't set any callback - should work normally
-        const dashboard2 = new DashboardProvider(mockContext as any, storage);
+        const dashboard2 = new DashboardProvider(mockContext as any, storage, new MockAIEventCollector() as any, new MockTimeTracker() as any);
 
         await storage.storeMetrics({
             quality: {

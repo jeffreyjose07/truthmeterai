@@ -12,6 +12,11 @@ export class TimeTracker implements vscode.Disposable {
     private lastActivity: number = Date.now();
     private lastKeystrokeTime: number = 0; // Last time user typed
     private isActive: boolean = false;
+    
+    // Flow State Tracking
+    private flowStartTimestamp: number = 0;
+    private currentFlowBlocks: Array<{ start: number; end: number }> = [];
+
     private intervalId: NodeJS.Timeout | null = null;
     private disposables: vscode.Disposable[] = [];
 
@@ -55,7 +60,8 @@ export class TimeTracker implements vscode.Disposable {
                 flowDuration: this.flowTime,
                 typingDuration: this.typingTime,
                 readingDuration: this.readingTime,
-                contextSwitches: this.contextSwitches
+                contextSwitches: this.contextSwitches,
+                flowBlocks: this.currentFlowBlocks // Store flow blocks
             });
             this.activeTime = 0;
             this.flowTime = 0;
@@ -64,6 +70,7 @@ export class TimeTracker implements vscode.Disposable {
             this.currentStreak = 0;
             this.isFlowing = false;
             this.contextSwitches = 0;
+            this.currentFlowBlocks = [];
         }
 
         if (type === 'typing') {
@@ -112,17 +119,33 @@ export class TimeTracker implements vscode.Disposable {
                 // (SPACE Framework - Efficiency)
                 if (!this.isFlowing && this.currentStreak >= 900000) {
                     this.isFlowing = true;
+                    this.flowStartTimestamp = now - this.currentStreak; // Start time was 15 mins ago
                     this.flowTime += this.currentStreak; // Add the buildup time
                 } else if (this.isFlowing) {
                     this.flowTime += 1000;
                 }
 
             } else {
+                // End flow if active
+                if (this.isFlowing) {
+                    this.currentFlowBlocks.push({
+                        start: this.flowStartTimestamp,
+                        end: Date.now() // Use current time as end
+                    });
+                }
+                
                 this.isActive = false;
                 this.currentStreak = 0;
                 this.isFlowing = false;
             }
         } else {
+            // End flow if active
+            if (this.isFlowing) {
+                this.currentFlowBlocks.push({
+                    start: this.flowStartTimestamp,
+                    end: Date.now()
+                });
+            }
             this.currentStreak = 0;
             this.isFlowing = false;
         }
@@ -153,7 +176,8 @@ export class TimeTracker implements vscode.Disposable {
             contextSwitches: currentTotalSwitches,
             currentSessionTime: this.activeTime / 1000 / 60, // minutes
             totalSessions: totalSessions,
-            averageSessionLength: totalSessions > 0 ? (totalTime / totalSessions) / 1000 / 60 : 0
+            averageSessionLength: totalSessions > 0 ? (totalTime / totalSessions) / 1000 / 60 : 0,
+            flowBlocks: sessions.flatMap((s: any) => s.flowBlocks || []) // Flatten all flow blocks from all sessions
         };
     }
 

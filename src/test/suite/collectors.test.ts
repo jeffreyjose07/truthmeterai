@@ -147,6 +147,13 @@ suite('AIEventCollector Test Suite', () => {
         assert.strictEqual(metrics.averageModificationTime, 0);
     });
 
+    test('should track file-specific stats', async () => {
+        const metrics = await collector.getMetrics();
+        assert.ok(metrics.fileStats);
+        // Should be empty initially
+        assert.strictEqual(Object.keys(metrics.fileStats).length, 0);
+    });
+
     test('should handle multiple startTracking calls', () => {
         // Should not throw when called multiple times
         collector.startTracking();
