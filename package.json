@@ -2,7 +2,7 @@
   "name": "truthmeter-ai",
   "displayName": "TruthMeter AI - Evidence-Based AI Code Metrics",
   "description": "How much of your code is AI-written, and does it stick? Measured from git attribution, agent session logs and line survival, not guesses.",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "publisher": "JeffreyJose",
   "author": {
     "name": "Jeffrey Jose"

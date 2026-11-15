@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.0.1 — 2026-11-15
+
+- Releases are now published to the VS Code Marketplace through trusted publishing (GitHub
+  OIDC) instead of a stored access token. No changes to the extension itself.
+
 ## 2.0.0 — 2026-11-15
 
 A ground-up rewrite. Version 1.x guessed which code was AI-written from typing speed and regular
