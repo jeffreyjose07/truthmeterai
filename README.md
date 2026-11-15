@@ -88,7 +88,7 @@ npm run analyze -- /path/to/repo --days 180 --agent-logs   # same analysis from 
 ```
 
 Publishing: push a `vX.Y.Z` tag matching `package.json`. GitHub Actions tests, then publishes to
-the VS Code Marketplace (OIDC trusted publishing, with a PAT fallback until 2026-12-01), Open VSX,
+the VS Code Marketplace (OIDC trusted publishing, no stored token), Open VSX,
 and a GitHub release.
 
 ## License

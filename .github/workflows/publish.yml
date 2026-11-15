@@ -36,19 +36,11 @@ jobs:
       - name: Package for the VS Code Marketplace
         run: npx vsce package --out truthmeter.vsix
 
-      # Preferred: trusted publishing (no stored secret). Needs a Trusted Publishing policy on the
-      # Marketplace publisher page for this repo + publish.yml. Personal access tokens stop working
-      # for Marketplace publishing on 2026-12-01.
+      # Trusted publishing (GitHub OIDC): no stored secret. Requires the Trusted Publishing policy
+      # on the Marketplace publisher page (owner jeffreyjose07, repo truthmeterai, workflow
+      # publish.yml). Renaming this file or the repo breaks it.
       - name: Publish to VS Code Marketplace (OIDC trusted publishing)
-        id: oidc
-        continue-on-error: true
         run: npx vsce publish --oidc --packagePath truthmeter.vsix --skip-duplicate
-
-      - name: Publish to VS Code Marketplace (PAT fallback, works until 2026-12-01)
-        if: steps.oidc.outcome == 'failure'
-        run: npx vsce publish --packagePath truthmeter.vsix --skip-duplicate
-        env:
-          VSCE_PAT: ${{ secrets.VSCE_PAT }}
 
       # Open VSX (Cursor, Windsurf, VSCodium, Antigravity...) uses a different publisher id.
       - name: Package for Open VSX
