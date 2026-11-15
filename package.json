@@ -1,8 +1,8 @@
 {
   "name": "truthmeter-ai",
-  "displayName": "TruthMeter AI - Coding Assistant Metrics",
-  "description": "Measure ACTUAL AI coding assistant ROI (Copilot, Cascade, Cursor, Cody, etc.) with research-backed metrics",
-  "version": "1.1.6",
+  "displayName": "TruthMeter AI - Evidence-Based AI Code Metrics",
+  "description": "How much of your code is AI-written, and does it stick? Measured from git attribution, agent session logs and line survival, not guesses.",
+  "version": "2.0.0",
   "publisher": "JeffreyJose",
   "author": {
     "name": "Jeffrey Jose"
@@ -18,134 +18,165 @@
     "url": "https://github.com/jeffreyjose07/truthmeterai/issues"
   },
   "engines": {
-    "vscode": "^1.74.0"
+    "vscode": "^1.90.0"
   },
   "categories": [
-    "Programming Languages",
     "Data Science",
+    "Visualization",
     "Other"
   ],
   "keywords": [
-    "AI",
+    "ai",
     "metrics",
-    "productivity",
+    "git",
+    "claude code",
     "copilot",
-    "cascade",
     "cursor",
-    "cody",
-    "coding-assistant",
-    "ROI",
-    "analytics"
+    "codex",
+    "code survival",
+    "code churn",
+    "attribution"
   ],
-  "activationEvents": [],
-  "main": "./out/extension.js",
+  "activationEvents": [
+    "workspaceContains:.git"
+  ],
+  "main": "./dist/extension.js",
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "TruthMeter runs git in the workspace, so it only activates in trusted workspaces."
+    },
+    "virtualWorkspaces": false
+  },
   "contributes": {
     "commands": [
       {
-        "command": "aiMetrics.showDashboard",
-        "title": "Show AI Metrics Dashboard",
-        "category": "AI Metrics"
+        "command": "truthmeter.showDashboard",
+        "title": "Show Dashboard",
+        "category": "TruthMeter",
+        "icon": "$(beaker)"
       },
       {
-        "command": "aiMetrics.generateReport",
-        "title": "Generate AI Impact Report",
-        "category": "AI Metrics"
+        "command": "truthmeter.refresh",
+        "title": "Refresh Metrics",
+        "category": "TruthMeter"
       },
       {
-        "command": "aiMetrics.startTracking",
-        "title": "Start AI Metrics Tracking",
-        "category": "AI Metrics"
+        "command": "truthmeter.exportReport",
+        "title": "Export Report as Markdown",
+        "category": "TruthMeter"
+      },
+      {
+        "command": "truthmeter.enableAgentLogs",
+        "title": "Turn On Agent Session Evidence",
+        "category": "TruthMeter"
       }
     ],
     "configuration": {
-      "title": "AI Metrics",
+      "title": "TruthMeter",
       "properties": {
-        "aiMetrics.enableTracking": {
-          "type": "boolean",
-          "default": true,
-          "description": "Enable AI metrics tracking"
+        "truthmeter.windowDays": {
+          "type": "number",
+          "default": 90,
+          "minimum": 7,
+          "maximum": 3650,
+          "description": "How many days of git history to analyse."
         },
-        "aiMetrics.teamMode": {
+        "truthmeter.survival.minAgeDays": {
+          "type": "number",
+          "default": 14,
+          "minimum": 1,
+          "description": "Only commits at least this old count toward line survival and fix-rate statistics, so recent code has had time to be reworked."
+        },
+        "truthmeter.survival.maxFiles": {
+          "type": "number",
+          "default": 400,
+          "minimum": 10,
+          "description": "Maximum number of files to run git blame on. Files touched least often are skipped first."
+        },
+        "truthmeter.agentLogs.enabled": {
           "type": "boolean",
           "default": false,
-          "description": "Enable team metrics aggregation"
+          "markdownDescription": "Read local Claude Code (`~/.claude/projects`) and Codex (`~/.codex/sessions`) session logs to find files an AI agent edited. Only file paths and timestamps inside the workspace are used. Nothing leaves your machine."
         },
-        "aiMetrics.developerHourlyRate": {
-          "type": "number",
-          "default": 75,
-          "description": "Average developer hourly rate for ROI calculation"
-        },
-        "aiMetrics.performance.maxEvents": {
-          "type": "number",
-          "default": 1000,
-          "description": "Maximum events to keep in memory"
-        },
-        "aiMetrics.performance.debounceDelay": {
-          "type": "number",
-          "default": 300,
-          "description": "Debounce delay in milliseconds"
-        },
-        "aiMetrics.performance.analysisInterval": {
-          "type": "number",
-          "default": 600000,
-          "description": "Full analysis interval in milliseconds"
-        },
-        "aiMetrics.enableBurnoutWarnings": {
+        "truthmeter.attribution.trustCopilotTrailer": {
           "type": "boolean",
           "default": true,
-          "description": "Enable health warnings for prolonged coding sessions (>3 hours)"
+          "markdownDescription": "Count `Co-authored-by: Copilot` trailers as AI attribution. VS Code's `git.addAICoAuthor` setting can add them automatically, even when Copilot wrote little or nothing."
+        },
+        "truthmeter.attribution.customRules": {
+          "type": "array",
+          "default": [],
+          "markdownDescription": "Extra attribution rules, checked before the built-in ones. Each rule has a `tool` name and a `pattern` (regular expression) tested against the commit author, committer and message.",
+          "items": {
+            "type": "object",
+            "required": [
+              "tool",
+              "pattern"
+            ],
+            "properties": {
+              "tool": {
+                "type": "string"
+              },
+              "pattern": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "truthmeter.excludePatterns": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "(^|/)package-lock\\.json$",
+            "(^|/)yarn\\.lock$",
+            "(^|/)pnpm-lock\\.yaml$",
+            "(^|/)bun\\.lockb?$",
+            "(^|/)Cargo\\.lock$",
+            "(^|/)poetry\\.lock$",
+            "(^|/)uv\\.lock$",
+            "(^|/)go\\.sum$",
+            "(^|/)composer\\.lock$",
+            "(^|/)Gemfile\\.lock$",
+            "\\.min\\.(js|css)$",
+            "(^|/)(dist|out|build|vendor|node_modules)/"
+          ],
+          "description": "Regular expressions for file paths to leave out of line counts (lock files, build output)."
+        },
+        "truthmeter.statusBar.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show the AI-attributed commit share in the status bar."
         }
       }
     }
   },
   "scripts": {
-    "vscode:prepublish": "npm run compile",
-    "compile": "tsc -p ./ && webpack --mode production",
-    "watch": "tsc -watch -p ./",
-    "pretest": "npm run compile && npm run lint",
-    "lint": "eslint src --ext ts",
-    "test": "node ./out/test/runTest.js",
-    "test:unit": "npm run compile && mocha --ui tdd --exit --require ts-node/register --require src/test/unit-setup.ts 'src/test/suite/**/*.test.ts'",
-    "test:coverage": "nyc npm run test:unit",
-    "clean": "rm -rf out *.vsix",
+    "vscode:prepublish": "npm run bundle",
+    "bundle": "node esbuild.mjs --production",
+    "compile": "tsc -p ./",
+    "watch": "node esbuild.mjs --watch",
+    "lint": "eslint src",
+    "test:unit": "npm run compile && mocha --exit 'out/test/unit/**/*.test.js'",
+    "test:e2e": "npm run compile && npm run bundle && node ./out/test/e2e/runTest.js",
+    "test": "npm run lint && npm run test:unit && npm run test:e2e",
+    "analyze": "npm run compile && node ./out/cli.js",
     "package": "vsce package",
-    "publish": "vsce publish",
-    "publish:ovsx": "./scripts/publish-ovsx.sh",
-    "analyze": "webpack --mode production --profile --json > stats.json && webpack-bundle-analyzer stats.json",
-    "prepare": "husky"
+    "clean": "rm -rf out dist *.vsix"
   },
   "devDependencies": {
-    "@types/glob": "^8.1.0",
-    "@types/mocha": "^10.0.1",
-    "@types/node": "18.x",
-    "@types/vscode": "^1.74.0",
-    "@typescript-eslint/eslint-plugin": "^5.45.0",
-    "@typescript-eslint/parser": "^5.45.0",
-    "@vscode/test-electron": "^2.3.0",
-    "@vscode/vsce": "^3.7.1",
-    "eslint": "^8.28.0",
-    "glob": "^8.1.0",
-    "husky": "^9.1.7",
-    "lint-staged": "^16.2.7",
-    "mocha": "^10.2.0",
-    "nyc": "^15.1.0",
-    "ts-loader": "^9.4.1",
-    "ts-node": "^10.9.1",
-    "typescript": "^4.9.3",
-    "webpack": "^5.75.0",
-    "webpack-bundle-analyzer": "^4.9.0",
-    "webpack-cli": "^5.0.0"
-  },
-  "dependencies": {
-    "chart.js": "^4.3.0",
-    "chartjs-adapter-date-fns": "^3.0.0",
-    "date-fns": "^2.30.0",
-    "lodash": "^4.17.21",
-    "simple-git": "^3.19.0"
-  },
-  "lint-staged": {
-    "*.ts": [
-      "eslint --fix"
-    ]
+    "@types/mocha": "^10.0.10",
+    "@types/node": "^22.10.0",
+    "@types/vscode": "1.90.0",
+    "@vscode/test-electron": "^3.1.0",
+    "@vscode/vsce": "^4.1.1",
+    "esbuild": "^0.28.2",
+    "eslint": "^10.15.0",
+    "mocha": "^11.8.0",
+    "ovsx": "^1.4.0",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.72.2"
   }
 }

@@ -1,43 +1,68 @@
 name: Publish Extension
 
+# Push a tag like v2.0.0 to publish. The tag must match package.json's version.
 on:
   push:
-    tags:
-      - 'v*'
+    tags: ['v*']
+
+permissions:
+  contents: write   # create the GitHub release
+  id-token: write   # OIDC trusted publishing to the VS Code Marketplace
 
 jobs:
-  build-and-deploy:
+  publish:
     runs-on: ubuntu-latest
     steps:
-    - name: Checkout
-      uses: actions/checkout@v3
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
 
-    - name: Install Node.js
-      uses: actions/setup-node@v3
-      with:
-        node-version: 20
-        cache: 'npm'
+      - name: Check tag matches package.json version
+        run: |
+          v=$(node -p "require('./package.json').version")
+          [ "v$v" = "${GITHUB_REF_NAME}" ] || { echo "Tag ${GITHUB_REF_NAME} != package.json v$v"; exit 1; }
 
-    - name: Install dependencies
-      run: npm ci
+      - run: npm run lint
+      - run: npm run test:unit
+      - run: xvfb-run -a npm run test:e2e
+        env:
+          VSCODE_VERSION: stable
 
-    - name: Compile
-      run: npm run compile
+      - name: Package for the VS Code Marketplace
+        run: npx vsce package --out truthmeter.vsix
 
-    - name: Run Tests
-      run: xvfb-run -a npm test
-      continue-on-error: false
+      # Preferred: trusted publishing (no stored secret). Needs a Trusted Publishing policy on the
+      # Marketplace publisher page for this repo + publish.yml. Personal access tokens stop working
+      # for Marketplace publishing on 2026-12-01.
+      - name: Publish to VS Code Marketplace (OIDC trusted publishing)
+        id: oidc
+        continue-on-error: true
+        run: npx vsce publish --oidc --packagePath truthmeter.vsix --skip-duplicate
 
-    - name: Publish to VS Code Marketplace
-      run: npx vsce publish -p ${{ secrets.VSCE_PAT }}
+      - name: Publish to VS Code Marketplace (PAT fallback, works until 2026-12-01)
+        if: steps.oidc.outcome == 'failure'
+        run: npx vsce publish --packagePath truthmeter.vsix --skip-duplicate
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
 
-    - name: Prepare package.json for Open VSX
-      run: |
-        jq '.publisher = "jeffreyjose07"' package.json > package.json.tmp
-        mv package.json.tmp package.json
+      # Open VSX (Cursor, Windsurf, VSCodium, Antigravity...) uses a different publisher id.
+      - name: Package for Open VSX
+        run: |
+          jq '.publisher = "jeffreyjose07"' package.json > package.json.tmp && mv package.json.tmp package.json
+          npx vsce package --out truthmeter-ovsx.vsix
+          git checkout package.json
 
-    - name: Publish to Open VSX Registry
-      run: npx ovsx publish -p ${{ secrets.OVSX_PAT }}
+      - name: Publish to Open VSX
+        run: npx ovsx publish truthmeter-ovsx.vsix --skip-duplicate
+        env:
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
 
-    - name: Revert package.json changes
-      run: git checkout package.json
+      - name: GitHub release
+        run: gh release create "$GITHUB_REF_NAME" truthmeter.vsix --title "$GITHUB_REF_NAME" --notes-file <(awk '/^## /{n++} n==1' CHANGELOG.md) || gh release upload "$GITHUB_REF_NAME" truthmeter.vsix --clobber
+        env:
+          GH_TOKEN: ${{ github.token }}

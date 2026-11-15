@@ -1,519 +1,234 @@
 import * as vscode from 'vscode';
-import * as fs from 'fs';
-import * as path from 'path';
-import type { AIEventCollector } from './collectors/AIEventCollector';
-import type { CodeChangeCollector } from './collectors/CodeChangeCollector';
-import type { TimeTracker } from './collectors/TimeTracker';
-import type { GitAnalyzer } from './collectors/GitAnalyzer';
-import type { PerformanceCollector } from './collectors/PerformanceCollector';
-import type { CodeQualityAnalyzer } from './analyzers/CodeQualityAnalyzer';
-import type { ProductivityAnalyzer } from './analyzers/ProductivityAnalyzer';
-import type { PerformanceAnalyzer } from './analyzers/PerformanceAnalyzer';
-import type { ROICalculator } from './calculators/ROICalculator';
-import type { DashboardProvider } from './ui/DashboardProvider';
-import type { StatusBarManager } from './ui/StatusBarManager';
-import type { LocalStorage } from './storage/LocalStorage';
-import { Logger } from './utils/Logger';
-import { AllMetrics } from './types/metrics';
-import { ReportGenerator } from './reporters/ReportGenerator';
+import { analyzeRepo, RepoReport, AnalyzeOptions } from './core/analyze';
+import { findRepoRoot } from './core/git';
+import { toMarkdown, pct, share } from './core/report';
+import { CustomRule } from './core/attribution';
+import { renderDashboard, DashboardState } from './dashboard';
 
-/**
- * INDUSTRY BEST PRACTICES VERSION
- *
- * Fixes Based on VS Code Extension Research:
- * 1. ✅ No activation events (auto-activate on command)
- * 2. ✅ Lazy initialization (create only when needed)
- * 3. ✅ Proper subscription management (all in context.subscriptions)
- * 4. ✅ Cancellation token support
- * 5. ✅ Progressive loading (basic → advanced features)
- * 6. ✅ No heavy work during activation
- * 7. ✅ Dispose pattern for cleanup
- */
+const STALE_MS = 10 * 60_000;
 
-// Lazy-loaded singletons
-let storage: LocalStorage | undefined;
-let aiCollector: AIEventCollector | undefined;
-let codeCollector: CodeChangeCollector | undefined;
-let timeTracker: TimeTracker | undefined;
-let perfCollector: PerformanceCollector | undefined;
-let gitAnalyzer: GitAnalyzer | undefined;
-let qualityAnalyzer: CodeQualityAnalyzer | undefined;
-let productivityAnalyzer: ProductivityAnalyzer | undefined;
-let perfAnalyzer: PerformanceAnalyzer | undefined;
-let roiCalculator: ROICalculator | undefined;
-let dashboard: DashboardProvider | undefined;
-let statusBar: StatusBarManager | undefined;
-let reportGenerator: ReportGenerator | undefined;
+class TruthMeter implements vscode.Disposable {
+    private reports: RepoReport[] = [];
+    private selected = 0;
+    private lastRun = 0;
+    private running?: Promise<void>;
+    private error?: string;
+    private panel?: vscode.WebviewPanel;
+    private readonly status: vscode.StatusBarItem;
+    private readonly output: vscode.LogOutputChannel;
+    private readonly disposables: vscode.Disposable[] = [];
 
-let analysisToken: vscode.CancellationTokenSource | undefined;
-let logger: Logger;
+    constructor(private readonly ctx: vscode.ExtensionContext) {
+        this.output = vscode.window.createOutputChannel('TruthMeter', { log: true });
+        this.status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 50);
+        this.status.command = 'truthmeter.showDashboard';
+        this.status.name = 'TruthMeter';
+        this.disposables.push(this.output, this.status);
+    }
 
-/**
- * Activation: Ultra-lightweight
- * No heavy initialization - just register commands
- */
-export async function activate(context: vscode.ExtensionContext) {
-    logger = new Logger();
-    logger.info('AI Metrics activating (industry best practices)...');
+    private config() {
+        return vscode.workspace.getConfiguration('truthmeter');
+    }
 
-    // FIX #1: No activation events needed
-    // Starting from VS Code 1.74.0, commands auto-activate on first use
+    private options(): AnalyzeOptions {
+        const c = this.config();
+        const gitPath = vscode.workspace.getConfiguration('git').get<string | string[]>('path');
+        return {
+            windowDays: c.get<number>('windowDays', 90),
+            minAgeDays: c.get<number>('survival.minAgeDays', 14),
+            excludes: c.get<string[]>('excludePatterns'),
+            customRules: c.get<CustomRule[]>('attribution.customRules', []),
+            trustCopilotTrailer: c.get<boolean>('attribution.trustCopilotTrailer', true),
+            agentLogs: { enabled: c.get<boolean>('agentLogs.enabled', false) },
+            git: { gitPath: Array.isArray(gitPath) ? gitPath[0] : gitPath || undefined },
+            maxBlameFiles: c.get<number>('survival.maxFiles', 400),
+        };
+    }
 
-    // FIX #2: Lazy initialization
-    // Don't create any objects until actually needed
+    async repoRoots(): Promise<string[]> {
+        const roots = new Set<string>();
+        const git = this.options().git;
+        for (const f of vscode.workspace.workspaceFolders ?? []) {
+            if (f.uri.scheme !== 'file') { continue; }
+            const root = await findRepoRoot(f.uri.fsPath, git);
+            if (root) { roots.add(root); }
+        }
+        return [...roots];
+    }
 
-    // FIX #3: All subscriptions added to context
-    context.subscriptions.push(
-        vscode.commands.registerCommand('aiMetrics.showDashboard', async () => {
+    /** Re-analyses every repo in the workspace. Concurrent calls share one run. */
+    refresh(): Promise<void> {
+        if (this.running) { return this.running; }
+        this.running = (async () => {
+            const started = Date.now();
+            this.render(true);
+            this.status.text = '$(sync~spin) TruthMeter';
             try {
-                // Ensure tracking is started first
-                await ensureTracking(context);
-                
-                const dash = await getDashboard(context);
-
-                // Calculate and store fresh metrics before showing dashboard
-                await calculateAndStoreMetrics(context);
-
-                // Small delay to ensure metrics are stored
-                await new Promise(resolve => setTimeout(resolve, 100));
-
-                dash.show();
-            } catch (error) {
-                logger.error('Error showing dashboard', error);
-                vscode.window.showErrorMessage('Failed to show dashboard');
-            }
-        }),
-
-        vscode.commands.registerCommand('aiMetrics.generateReport', async () => {
-            try {
-                const cts = new vscode.CancellationTokenSource();
-                context.subscriptions.push(cts);
-
-                const metrics = await collectAllMetrics(context, cts.token);
-
-                if (cts.token.isCancellationRequested) {
-                    return;
-                }
-
-                // Generate HTML Content
-                if (!reportGenerator) {
-                    reportGenerator = new ReportGenerator(context.extensionPath);
-                }
-                
-                const workspaceName = vscode.workspace.name || 'Project';
-                const htmlContent = reportGenerator.generateHTML(metrics, workspaceName);
-
-                // Prompt user to save
-                const defaultUri = vscode.workspace.workspaceFolders 
-                    ? vscode.Uri.file(path.join(vscode.workspace.workspaceFolders[0].uri.fsPath, 'AI_Impact_Report.html'))
-                    : undefined;
-
-                const saveUri = await vscode.window.showSaveDialog({
-                    defaultUri: defaultUri,
-                    filters: {
-                        'HTML Files': ['html']
-                    },
-                    title: 'Save AI Impact Report'
-                });
-
-                if (saveUri) {
-                    fs.writeFileSync(saveUri.fsPath, htmlContent);
-                    
-                    const action = await vscode.window.showInformationMessage(
-                        `Report saved to ${path.basename(saveUri.fsPath)}`,
-                        'Open Report',
-                        'Open in Browser'
-                    );
-
-                    if (action === 'Open Report') {
-                        const doc = await vscode.workspace.openTextDocument(saveUri);
-                        await vscode.window.showTextDocument(doc);
-                    } else if (action === 'Open in Browser') {
-                        await vscode.env.openExternal(saveUri);
+                const roots = await this.repoRoots();
+                const opts = this.options();
+                const reports: RepoReport[] = [];
+                for (const root of roots) {
+                    try {
+                        reports.push(await analyzeRepo(root, opts));
+                    } catch (e) {
+                        this.output.error(`Analysis failed for ${root}: ${e}`);
                     }
                 }
-            } catch (error) {
-                logger.error('Error generating report', error);
-                vscode.window.showErrorMessage('Failed to generate report');
+                this.reports = reports;
+                this.selected = Math.min(this.selected, Math.max(0, reports.length - 1));
+                this.error = roots.length && !reports.length ? 'Git analysis failed. See the TruthMeter output channel for details.' : undefined;
+                this.output.info(`Analysed ${reports.length} repo(s) in ${Date.now() - started} ms`);
+            } catch (e) {
+                this.error = String(e);
+                this.output.error(String(e));
+            } finally {
+                this.lastRun = Date.now();
+                this.running = undefined;
+                this.updateStatus();
+                this.render(false);
             }
-        }),
+        })();
+        return this.running;
+    }
 
-        vscode.commands.registerCommand('aiMetrics.startTracking', async () => {
-            try {
-                await ensureTracking(context);
-                vscode.window.showInformationMessage('Tracking started');
+    refreshIfStale(): void {
+        if (Date.now() - this.lastRun > STALE_MS) { void this.refresh(); }
+    }
 
-                const bar = await getStatusBar(context);
-                bar.show();
-            } catch (error) {
-                logger.error('Error starting tracking', error);
-            }
-        }),
+    private updateStatus(): void {
+        const r = this.reports[this.selected];
+        if (!this.config().get<boolean>('statusBar.enabled', true) || !r) {
+            this.status.hide();
+            return;
+        }
+        const s = share(r.totals.aiCommits, r.totals.commits);
+        this.status.text = `$(beaker) AI ${s === null ? '–' : pct(s)}`;
+        const tip = new vscode.MarkdownString(
+            `**TruthMeter — ${r.repoName}** (last ${r.windowDays} days)\n\n` +
+            `- AI-attributed commits: ${r.totals.aiCommits}/${r.totals.commits}\n` +
+            `- AI line survival: ${pct(r.ai.survivalRate)} (other: ${pct(r.other.survivalRate)})\n\n` +
+            'Click to open the dashboard.'
+        );
+        this.status.tooltip = tip;
+        this.status.show();
+    }
 
-        // FIX #4: Cancellation support
-        vscode.commands.registerCommand('aiMetrics.stopAnalysis', () => {
-            if (analysisToken) {
-                analysisToken.cancel();
-                analysisToken.dispose();
-                analysisToken = undefined;
-            }
-        }),
+    private state(loading: boolean): DashboardState {
+        return {
+            reports: this.reports,
+            selected: this.selected,
+            windowDays: this.config().get<number>('windowDays', 90),
+            agentLogsEnabled: this.config().get<boolean>('agentLogs.enabled', false),
+            error: this.error,
+            loading,
+        };
+    }
 
-        vscode.commands.registerCommand('aiMetrics.promptSatisfactionSurvey', async () => {
-            const options = [
-                { label: '😊 Great', description: '5 - Very Satisfied' },
-                { label: '🙂 Good', description: '4 - Satisfied' },
-                { label: '😐 Neutral', description: '3 - Neither Satisfied nor Dissatisfied' },
-                { label: '🙁 Bad', description: '2 - Dissatisfied' },
-                { label: '😞 Terrible', description: '1 - Very Dissatisfied' },
-            ];
-            const selection = await vscode.window.showQuickPick(options, {
-                placeHolder: 'How was your recent coding session experience with AI?',
-                canPickMany: false
+    private render(loading: boolean): void {
+        if (this.panel) {
+            this.panel.webview.html = renderDashboard(this.state(loading), this.panel.webview.cspSource);
+        }
+    }
+
+    showDashboard(): void {
+        if (this.panel) {
+            this.panel.reveal();
+        } else {
+            this.panel = vscode.window.createWebviewPanel('truthmeter.dashboard', 'TruthMeter', vscode.ViewColumn.Active, {
+                enableScripts: true,
+                localResourceRoots: [],
             });
+            this.panel.iconPath = vscode.Uri.joinPath(this.ctx.extensionUri, 'icon.png');
+            this.panel.onDidDispose(() => (this.panel = undefined), null, this.disposables);
+            this.panel.webview.onDidReceiveMessage((m) => this.onMessage(m), null, this.disposables);
+            this.render(!!this.running);
+        }
+        this.refreshIfStale();
+    }
 
-            if (selection) {
-                const stor = await getStorage(context);
-                const rating = parseInt(selection.description.split(' ')[0], 10);
-                stor.store('satisfaction_feedback', {
-                    timestamp: Date.now(),
-                    rating: rating,
-                    label: selection.label
-                });
-                logger.info(`User satisfaction recorded: ${rating}`);
-                vscode.window.showInformationMessage(`Thank you for your feedback: ${selection.label}`);
-            }
+    private async onMessage(m: { type: string; index?: number; days?: number }): Promise<void> {
+        switch (m.type) {
+            case 'refresh':
+                await this.refresh();
+                break;
+            case 'export':
+                await this.exportReport();
+                break;
+            case 'enableAgent':
+                await this.enableAgentLogs();
+                break;
+            case 'selectRepo':
+                this.selected = m.index ?? 0;
+                this.updateStatus();
+                this.render(false);
+                break;
+            case 'setWindow':
+                // Configuration change listener triggers the refresh.
+                await this.config().update('windowDays', m.days, vscode.ConfigurationTarget.Global);
+                break;
+        }
+    }
+
+    async exportReport(): Promise<void> {
+        if (!this.reports.length) { await this.refresh(); }
+        const r = this.reports[this.selected];
+        if (!r) {
+            void vscode.window.showWarningMessage('TruthMeter: no git repository found in this workspace.');
+            return;
+        }
+        const doc = await vscode.workspace.openTextDocument({ language: 'markdown', content: toMarkdown(r) });
+        await vscode.window.showTextDocument(doc, { preview: false });
+    }
+
+    async enableAgentLogs(): Promise<void> {
+        const choice = await vscode.window.showInformationMessage(
+            'TruthMeter will read local Claude Code (~/.claude/projects) and Codex (~/.codex/sessions) session logs to find files an agent edited. Only file paths and timestamps inside this workspace are used, and nothing leaves your machine.',
+            { modal: true },
+            'Turn on'
+        );
+        if (choice === 'Turn on') {
+            await this.config().update('agentLogs.enabled', true, vscode.ConfigurationTarget.Global);
+        }
+    }
+
+    /** For tests: the latest reports. */
+    get latest(): readonly RepoReport[] {
+        return this.reports;
+    }
+
+    dispose(): void {
+        this.panel?.dispose();
+        vscode.Disposable.from(...this.disposables).dispose();
+    }
+}
+
+export interface TruthMeterApi {
+    refresh(): Promise<void>;
+    reports(): readonly RepoReport[];
+}
+
+export function activate(ctx: vscode.ExtensionContext): TruthMeterApi {
+    const tm = new TruthMeter(ctx);
+    ctx.subscriptions.push(
+        tm,
+        vscode.commands.registerCommand('truthmeter.showDashboard', () => tm.showDashboard()),
+        vscode.commands.registerCommand('truthmeter.refresh', () => tm.refresh()),
+        vscode.commands.registerCommand('truthmeter.exportReport', () => tm.exportReport()),
+        vscode.commands.registerCommand('truthmeter.enableAgentLogs', () => tm.enableAgentLogs()),
+        vscode.workspace.onDidChangeConfiguration((e) => {
+            if (e.affectsConfiguration('truthmeter')) { void tm.refresh(); }
+        }),
+        vscode.workspace.onDidChangeWorkspaceFolders(() => void tm.refresh()),
+        vscode.window.onDidChangeWindowState((s) => {
+            if (s.focused) { tm.refreshIfStale(); }
         })
     );
-
-    logger.info('AI Metrics activated (lightweight - no resources allocated)');
-
-    // FIX #6: No welcome message during activation
-    // Show it only after 5 seconds if user hasn't used it yet
-    const welcomeTimer = setTimeout(() => {
-        const config = vscode.workspace.getConfiguration('aiMetrics');
-        if (config.get('enableTracking')) {
-            vscode.window.showInformationMessage(
-                'AI Metrics is ready',
-                'Show Dashboard',
-                'Dismiss'
-            ).then(selection => {
-                if (selection === 'Show Dashboard') {
-                    vscode.commands.executeCommand('aiMetrics.showDashboard');
-                }
-            });
-        }
-    }, 5000);
-
-    context.subscriptions.push({
-        dispose: () => clearTimeout(welcomeTimer)
-    });
+    // Defer the first analysis so it never competes with editor startup.
+    const t = setTimeout(() => void tm.refresh(), 3000);
+    ctx.subscriptions.push({ dispose: () => clearTimeout(t) });
+    return { refresh: () => tm.refresh(), reports: () => tm.latest };
 }
 
-/**
- * FIX #2: Lazy getters - create on demand
- */
-async function getStorage(context: vscode.ExtensionContext): Promise<LocalStorage> {
-    if (!storage) {
-        const { LocalStorage } = await import('./storage/LocalStorage');
-        storage = new LocalStorage(context);
-        await storage.initialize();
-        logger.info('Storage initialized');
-    }
-    return storage;
-}
-
-async function getCollectors(context: vscode.ExtensionContext) {
-    if (!aiCollector) {
-        const stor = await getStorage(context);
-        const { AIEventCollector } = await import('./collectors/AIEventCollector');
-        const { CodeChangeCollector } = await import('./collectors/CodeChangeCollector');
-        const { TimeTracker } = await import('./collectors/TimeTracker');
-        const { PerformanceCollector } = await import('./collectors/PerformanceCollector');
-
-        aiCollector = new AIEventCollector(stor);
-        codeCollector = new CodeChangeCollector(stor);
-        timeTracker = new TimeTracker(stor);
-        perfCollector = new PerformanceCollector();
-
-        logger.info('Collectors created');
-    }
-    return { aiCollector, codeCollector, timeTracker, perfCollector };
-}
-
-async function getGitAnalyzer(): Promise<GitAnalyzer> {
-    if (!gitAnalyzer) {
-        const { GitAnalyzer } = await import('./collectors/GitAnalyzer');
-        gitAnalyzer = new GitAnalyzer();
-        await gitAnalyzer.initialize();
-        logger.info('Git analyzer initialized');
-    }
-    return gitAnalyzer;
-}
-
-async function getAnalyzers(context: vscode.ExtensionContext) {
-    if (!qualityAnalyzer) {
-        const stor = await getStorage(context); // Get storage instance
-        const { CodeQualityAnalyzer } = await import('./analyzers/CodeQualityAnalyzer');
-        const { ProductivityAnalyzer } = await import('./analyzers/ProductivityAnalyzer');
-        const { PerformanceAnalyzer } = await import('./analyzers/PerformanceAnalyzer');
-        const { ROICalculator } = await import('./calculators/ROICalculator');
-
-        qualityAnalyzer = new CodeQualityAnalyzer();
-        productivityAnalyzer = new ProductivityAnalyzer(stor); // Pass storage to ProductivityAnalyzer
-        perfAnalyzer = new PerformanceAnalyzer();
-        roiCalculator = new ROICalculator();
-
-        logger.info('Analyzers created');
-    }
-    return { qualityAnalyzer, productivityAnalyzer, perfAnalyzer, roiCalculator };
-}
-
-async function getDashboard(context: vscode.ExtensionContext): Promise<DashboardProvider> {
-    if (!dashboard) {
-        const stor = await getStorage(context);
-        const collectors = await getCollectors(context); // Get collectors here
-        const { DashboardProvider } = await import('./ui/DashboardProvider');
-        dashboard = new DashboardProvider(context, stor, collectors.aiCollector!, collectors.timeTracker!);
-
-        // Set refresh callback to recalculate metrics
-        dashboard.setRefreshCallback(async () => {
-            await calculateAndStoreMetrics(context);
-        });
-
-        logger.info('Dashboard created');
-    }
-    return dashboard;
-}
-
-async function getStatusBar(context: vscode.ExtensionContext): Promise<StatusBarManager> {
-    if (!statusBar) {
-        const { StatusBarManager } = await import('./ui/StatusBarManager');
-        statusBar = new StatusBarManager();
-        context.subscriptions.push(statusBar);
-        logger.info('Status bar created');
-    }
-    return statusBar;
-}
-
-/**
- * FIX #5: Progressive loading
- * Start tracking only when needed
- */
-// Track if we've already started tracking to avoid duplicate initialization
-let trackingStarted = false;
-
-async function ensureTracking(context: vscode.ExtensionContext) {
-    // Avoid starting tracking multiple times
-    if (trackingStarted) {
-        logger.info('Tracking already started, skipping re-initialization');
-        return;
-    }
-
-    logger.info('Starting tracking for the first time...');
-    const collectors = await getCollectors(context);
-
-    if (!collectors.aiCollector || !collectors.codeCollector || !collectors.timeTracker) {
-        logger.error('Collectors not initialized properly');
-        return;
-    }
-
-    // Start tracking (lightweight - just event listeners)
-    collectors.aiCollector.startTracking();
-    collectors.codeCollector.startTracking();
-    collectors.timeTracker.startTracking();
-    // Performance collector starts automatically in constructor but needs disposal
-
-    trackingStarted = true;
-    logger.info('Tracking started successfully!');
-
-    // Git analyzer is expensive - delay it
-    setTimeout(async () => {
-        try {
-            await getGitAnalyzer();
-        } catch (error) {
-            logger.error('Git analyzer failed to initialize', error);
-        }
-    }, 10000); // 10 seconds after first use
-
-    // Start periodic updates (only for status bar)
-    const statusBarInterval = setInterval(async () => {
-        try {
-            const bar = await getStatusBar(context);
-            const stats = collectors.aiCollector!.getQuickStats();
-            bar.update(stats);
-        } catch (error) {
-            logger.error('Error updating status bar', error);
-        }
-    }, 15000); // Every 15 seconds
-
-    // Start periodic metrics calculation and storage
-    const metricsInterval = setInterval(async () => {
-        try {
-            await calculateAndStoreMetrics(context);
-        } catch (error) {
-            logger.error('Error calculating metrics', error);
-        }
-    }, 60000); // Every 60 seconds
-
-    context.subscriptions.push({
-        dispose: () => {
-            clearInterval(statusBarInterval);
-            clearInterval(metricsInterval);
-        }
-    });
-
-    logger.info('Tracking started');
-}
-
-/**
- * Calculate and store metrics periodically
- */
-async function calculateAndStoreMetrics(context: vscode.ExtensionContext): Promise<void> {
-    try {
-        const stor = await getStorage(context);
-        const collectors = await getCollectors(context);
-        const analyzers = await getAnalyzers(context); // Pass context here
-
-        // 1. Collect raw data from collectors
-        const [aiMetrics, codeMetrics, timeMetrics] = await Promise.all([
-            collectors.aiCollector!.getMetrics(),
-            collectors.codeCollector!.getMetrics(),
-            collectors.timeTracker!.getMetrics()
-        ]);
-
-        const perfEvents = collectors.perfCollector!.getEvents();
-        const rawAIEvents = collectors.aiCollector!.getRawEvents();
-
-        logger.info(`Raw metrics collected: Suggestions=${aiMetrics.totalSuggestions}, ActiveTime=${timeMetrics.totalActiveTime}`);
-
-        // 2. Run analysis using the raw data
-        // Note: Git analysis is skipped here for speed as it can be slow
-        
-        const qualityMetrics = await analyzers.qualityAnalyzer!.analyze(undefined, aiMetrics);
-        const productivityMetrics = await analyzers.productivityAnalyzer!.analyze(aiMetrics, codeMetrics, timeMetrics);
-        const perfMetrics = analyzers.perfAnalyzer!.analyze(perfEvents, rawAIEvents);
-        
-        // Pass productivity metrics to ROI calculator
-        const roiMetrics = await analyzers.roiCalculator!.calculate(productivityMetrics); 
-
-        // 3. Construct the full metrics object
-        const metrics: AllMetrics & { timestamp: number } = {
-            timestamp: Date.now(),
-            ai: aiMetrics,
-            code: codeMetrics,
-            time: timeMetrics,
-            quality: qualityMetrics,
-            productivity: productivityMetrics,
-            performance: perfMetrics,
-            roi: roiMetrics
-        };
-
-        // 4. Store the result
-        await stor.storeMetrics(metrics);
-        logger.info(`Full metrics calculated and stored. ROI=${metrics.roi?.overallROI}`);
-        
-    } catch (error) {
-        logger.error('Error in calculateAndStoreMetrics', error);
-        throw error;
-    }
-}
-
-/**
- * FIX #4: Cancellation token support
- */
-async function collectAllMetrics(
-    context: vscode.ExtensionContext,
-    token: vscode.CancellationToken
-): Promise<AllMetrics> {
-    if (token.isCancellationRequested) {
-        throw new Error('Cancelled');
-    }
-
-    const collectors = await getCollectors(context);
-    const analyzers = await getAnalyzers(context); // Pass context here
-
-    // Collect basic metrics (fast)
-    const [ai, code, time] = await Promise.all([
-        collectors.aiCollector!.getMetrics(),
-        collectors.codeCollector!.getMetrics(),
-        collectors.timeTracker!.getMetrics()
-    ]);
-
-    if (token.isCancellationRequested) {
-        throw new Error('Cancelled');
-    }
-
-    // Git analysis (slow - allow cancellation)
-    const git = await getGitAnalyzer().then(g => g.analyze());
-
-    if (token.isCancellationRequested) {
-        throw new Error('Cancelled');
-    }
-
-    // Heavy analysis (allow cancellation between steps)
-    const quality = await analyzers.qualityAnalyzer!.analyze(git, ai);
-    await yieldToEventLoop();
-
-    if (token.isCancellationRequested) {
-        throw new Error('Cancelled');
-    }
-
-    const productivity = await analyzers.productivityAnalyzer!.analyze();
-    await yieldToEventLoop();
-
-    if (token.isCancellationRequested) {
-        throw new Error('Cancelled');
-    }
-
-    const perfEvents = collectors.perfCollector!.getEvents();
-    const rawAIEvents = collectors.aiCollector!.getRawEvents();
-    const performance = analyzers.perfAnalyzer!.analyze(perfEvents, rawAIEvents);
-
-    const roi = await analyzers.roiCalculator!.calculate();
-
-    return { ai, code, time, git, quality, productivity, performance, roi };
-}
-
-function yieldToEventLoop(): Promise<void> {
-    return new Promise(resolve => setImmediate(resolve));
-}
-
-/**
- * FIX #7: Proper cleanup
- */
-export function deactivate() {
-    logger.info('Deactivating...');
-
-    // Cancel any running analysis
-    if (analysisToken) {
-        analysisToken.cancel();
-        analysisToken.dispose();
-    }
-
-    // Dispose all collectors
-    (aiCollector as any)?.dispose?.();
-    (codeCollector as any)?.dispose?.();
-    (timeTracker as any)?.dispose?.();
-    (perfCollector as any)?.dispose?.();
-
-    // Dispose UI
-    statusBar?.dispose();
-    (dashboard as any)?.dispose?.();
-
-    logger.dispose();
-
-    // Clear references for GC
-    storage = undefined;
-    aiCollector = undefined;
-    codeCollector = undefined;
-    timeTracker = undefined;
-    gitAnalyzer = undefined;
-    qualityAnalyzer = undefined;
-    productivityAnalyzer = undefined;
-    roiCalculator = undefined;
-    dashboard = undefined;
-    statusBar = undefined;
-
-    logger.info('Deactivated');
+export function deactivate(): void {
+    /* disposables handle cleanup */
 }

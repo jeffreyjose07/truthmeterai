@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        vscode: ['1.90.0', 'stable']
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run test:unit
+      - name: End-to-end tests in VS Code ${{ matrix.vscode }}
+        run: xvfb-run -a npm run test:e2e
+        env:
+          VSCODE_VERSION: ${{ matrix.vscode }}
+      - name: Package
+        if: matrix.vscode == 'stable'
+        run: npx vsce package --out truthmeter.vsix
+      - uses: actions/upload-artifact@v5
+        if: matrix.vscode == 'stable'
+        with:
+          name: truthmeter-vsix
+          path: truthmeter.vsix
