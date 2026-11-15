@@ -16,10 +16,10 @@ jobs:
         vscode: ['1.90.0', 'stable']
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -33,7 +33,7 @@ jobs:
       - name: Package
         if: matrix.vscode == 'stable'
         run: npx vsce package --out truthmeter.vsix
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v7
         if: matrix.vscode == 'stable'
         with:
           name: truthmeter-vsix
